@@ -1,5 +1,6 @@
-#include "MotorKit.hpp"
-#include "Logging.hpp"
+#include <cpp/MotorKit.hpp>
+#include <cpp/Logging.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <memory>

@@ -1,6 +1,7 @@
 #pragma once
 
-#include <stdint.h>
+#include "Vector.hpp"
+
 #include <unordered_map>
 #include <algorithm>
 #include <vector>
@@ -10,31 +11,7 @@ struct RGBColor;
 struct HSVColor;
 struct LabColor;
 
-using LEDBuffer = std::vector<RGBColor>;
-
 #pragma pack(push, 1)
-
-struct Vec3f
-{
-  float X = 0.0f;
-  float Y = 0.0f;
-  float Z = 0.0f;
-
-  bool operator==(const Vec3f& other)
-  {
-    return X == other.X && Y == other.Y && Z == other.Z;
-  }
-
-  bool operator!=(const Vec3f& other)
-  {
-    return X != other.X || Y != other.Y || Z != other.Z;
-  }
-
-  Vec3f operator* (float c) const
-  {
-    return {c*X, c*Y, c*Z};
-  }
-};
 
 struct HSVColor
 {

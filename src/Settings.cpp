@@ -1,4 +1,5 @@
-#include "Settings.hpp"
+#include  <cpp/Settings.hpp>
+#include  <cpp/Logging.hpp>
 
 #include <hardware/flash.h>
 #include <pico/stdlib.h>
@@ -78,7 +79,7 @@ bool Settings::readFromFlash()
 {
   for (int i=0; i < 2; ++i)
   {
-    std::cout << "Loading settings from sector " << i << std::endl << std::flush;
+    DEBUG_LOG("Loading settings from sector " << i);
     Settings flashSettings = *flashSettingsPtr(i);
     uint64_t crc = flashSettings.calculateCrc();
     if (flashSettings.crc == crc)
@@ -88,7 +89,7 @@ bool Settings::readFromFlash()
     }
     else
     {
-      std::cout << "CRC check failed!" << std::endl << std::flush;
+      DEBUG_LOG("CRC check failed!");
     }
   }
   return false;
@@ -96,7 +97,7 @@ bool Settings::readFromFlash()
 
 void Settings::print()
 {
-  std::cout << "-- Redeye --" << std::endl;
+  std::cout << "-- Settings --" << std::endl;
   std::cout << "crc: " << crc << std::endl;
   std::cout << "size: " << size << std::endl;
   std::cout << "boardId: " << *((uint64_t*)boardId.id) << std::endl << std::flush;
@@ -147,23 +148,23 @@ uint64_t Settings::calculateCrc() const
 SettingsManager::SettingsManager()
 {
   // Read the current settings
-  std::cout << "Loading settings..." << std::endl << std::flush;
+  DEBUG_LOG("Loading settings...");
   if (!settings.readFromFlash())
   {
-    std::cout << "No valid settings found, loading defaults..." << std::endl << std::flush;
+    DEBUG_LOG("No valid settings found, loading defaults...");
     settings.setDefaults();
   }
   //settings.print();
-  std::cout << "Load complete!" << std::endl << std::flush;
+  DEBUG_LOG("Load complete!");
 
   // Validate the current settings
   std::cout << "Validating settings..." << std::endl << std::flush;
   if (!settings.validateAll())
   {
-    std::cout << "Some settings were invalid and had to be reset." << std::endl<< std::flush;
+    DEBUG_LOG("Some settings were invalid and had to be reset.");
   }
   //settings.print();
-  std::cout << "Validation complete!" << std::endl << std::flush;
+  DEBUG_LOG("Validation complete!");
 
   // Set up a next write time for autosave
   nextWriteTime = get_absolute_time();

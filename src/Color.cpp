@@ -1,4 +1,4 @@
-#include "Color.hpp"
+#include <cpp/Color.hpp>
 
 #include <cmath>
 #include <algorithm>

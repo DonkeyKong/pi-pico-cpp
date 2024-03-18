@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hardware/pwm.h"
+#include "Logging.hpp"
 
 class Servo
 {
@@ -75,6 +76,7 @@ public:
   {
     if (t < 0.0f || t > 1.0f)
     {
+      DEBUG_LOG("Requested servo pos out of range, t=" << t);
       return;
     }
     

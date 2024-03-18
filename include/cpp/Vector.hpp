@@ -1,72 +1,67 @@
 #pragma once
 
+#include "Math.hpp"
+#include <stdint.h>
 #include <cmath>
 
 template <typename T>
-inline bool between(T val, T bound1, T bound2)
-{
-  if (bound1 > bound2) return val >= bound2 && val <= bound1;
-  return val >= bound1 && val <= bound2;
-}
-
-template <typename T>
-struct Vect2
+struct Vec2
 {
   T x;
   T y;
 
   template <typename U>
-  Vect2(const Vect2<U>& other)
+  Vec2(const Vec2<U>& other)
   {
     x = (T)other.x;
     y = (T)other.y;
   }
 
   template <typename U>
-  Vect2(U x, U y)
+  Vec2(U x, U y)
   {
     x = (T)x;
     y = (T)y;
   }
 
-  inline Vect2<T> operator-(const Vect2<T>& rhs) const
+  inline Vec2<T> operator-(const Vec2<T>& rhs) const
   {
     return {x-rhs.x, y-rhs.y};
   }
 
-  inline Vect2<T> operator+(const Vect2<T>& rhs) const
+  inline Vec2<T> operator+(const Vec2<T>& rhs) const
   {
     return {x+rhs.x, y+rhs.y};
   }
 
-  inline Vect2<T> operator*(T rhs) const
+  inline Vec2<T> operator*(T rhs) const
   {
     return {x*rhs, y*rhs};
   }
 
-  inline Vect2<T> operator*(const Vect2<T>& rhs) const
+  inline Vec2<T> operator*(const Vec2<T>& rhs) const
   {
     return {x*rhs.x, y*rhs.y};
   }
 
-  inline Vect2<T> operator/(const Vect2<T>& rhs) const
+  inline Vec2<T> operator/(const Vec2<T>& rhs) const
   {
     return {x/rhs.x, y/rhs.y};
   }
 
-  inline Vect2<T> transpose() const
+  inline Vec2<T> transpose() const
   {
     return {y, x};
   }
 
   inline T getElementCloserToZero() const
   {
-    return std::abs(x) < std::abs(y) ? x : y
+    return std::abs(x) < std::abs(y) ? x : y;
   }
 
   inline T getElementFartherFromZero() const
   {
-    return std::abs(x) > std::abs(y) ? x : y
+    return std::abs(x) > std::abs(y) ? x : y;
   }
 
   template <typename OutT = T>
@@ -76,17 +71,50 @@ struct Vect2
   }
 
   template <typename OutT = T>
-  inline OutT dist(const Vect2<T>& v) const
+  inline OutT dist(const Vec2<T>& v) const
   {
     return std::sqrt(std::pow((OutT)(x-v.x), (OutT)2) + std::pow((OutT)(y-v.y), (OutT)2));
   }
 
-  bool inside(const Vect2<T>& v) const
+  bool inside(const Vec2<T>& v) const
   {
     return between(x, 0, v.x) && between(y, (T)0, v.y);
   }
 };
 
-typedef Vect2<float> Vect2f;
-typedef Vect2<double> Vect2d;
-typedef Vect2<int64_t> Vect2i;
+typedef Vec2<float> Vec2f;
+typedef Vec2<double> Vec2d;
+typedef Vec2<int64_t> Vec2i;
+
+struct Vec3f
+{
+  float X = 0.0f;
+  float Y = 0.0f;
+  float Z = 0.0f;
+
+  bool operator==(const Vec3f& other)
+  {
+    return X == other.X && Y == other.Y && Z == other.Z;
+  }
+
+  bool operator!=(const Vec3f& other)
+  {
+    return X != other.X || Y != other.Y || Z != other.Z;
+  }
+
+  Vec3f operator* (float c) const
+  {
+    return {c*X, c*Y, c*Z};
+  }
+
+  Vec3f normalize()
+  {
+    float n = norm();
+    return {X / n, Y / n, Z / n};
+  }
+
+  float norm() const
+  {
+    return std::sqrt(std::pow(X, 2.0f) + std::pow(Y, 2.0f) + std::pow(Z, 2.0f));
+  }
+};
