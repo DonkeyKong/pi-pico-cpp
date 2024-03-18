@@ -54,15 +54,40 @@ int main()
 
 ## Remote Command Terminal
 ### RemoteCommand.hpp (TBD)
-This module lets you process stdin as a simple command processor. Most useful when stdin is setup and connected to USB or UART. Each command is a series of params separated by strings, and ending in a newline. Built-in commands include:
+This module lets you use stdin as a simple command processor. Most useful when stdin is connected to USB or UART. 
 
-`prog` - Reboot into programming mode
+Commands have a name and optionally a series of params separated by spaces. You don't need to write any parsing code for parameters, so long as all the argument types can be assigned using `operator>>` from an istream. If the type cannot be assigned from `operator>>` you will get a compile error.
 
-`reboot` - Restart into normal mode
+Here we add a command called "release" that powers off two servos. It takes in no parameters. The command has no return value, so its assumed it always succeeds.
+```c++
+CommandParser parser;
+parser.addCommand("release", [&]()
+{
+  servoX.release();
+  servoY.release();
+});
+```
 
-Use `setProgCallback(...)` and `setRebootCallback(...)` to add code before the reboots.
+Here's a command that moves the servos to a specified position. This command also returns a bool, which should be true for success and false when the command fails. We bounds check the params and return false if they are out of range to avoid damaging the servos.
+```c++
+CommandParser parser;
+parser.addCommand("mt", [&](double xT, double yT)
+{
+  if (between(xT, 0.0, 1.0) &&
+      between(yT, 0.0, 1.0))
+  {
+    servoX.posT(xT);
+    servoY.posT(yT);
+    return true;
+  }
+  return false;
+});
+```
 
-Use `addCommand(...)` to add a new custom command.
+This command is invoked from a connected terminal like this:
+>mt 0.43 1.0
+
+And that's it really. From the remote console, pressing tab fills in the last submitted command and delete should work ok depending on terminal settings. This is not a full terminal emulator by any means, it contains just enough features to act as a debug/programming interface and get a project going.
 
 ## Color
 ### Color.hpp
