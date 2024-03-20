@@ -1,40 +1,33 @@
 # Pi Pico C++
 *C++ wrappers, drivers, and utils for pi pico*
 
-Do you love the Pi Pico but find yourself frustrated by the choices of C or Python? Are you saddened to buy hardware only to find it requires Arduino or Circuit Python to work? Are you spending hours reading docs and poring over examples to do anything?
+Jump right into making complex C++ projects with the pi pico, without spending forever reading docs or writing boilerplate.
 
-With this collection of wrappers, drivers, and utilities, you'll be able to jump right into making complex C++ projects with the Pi Pico, without an enormous effort just to setup development scaffolding or talk to hardware.
+This repo is a work in progress. Some components are still being generalized. None of this code uses exceptions.
 
-This repo is a work in progress. Every component here originated in some pi pico project, but was found sufficiently useful to be reused again and again. Some components are missing and others are still in the process of being generalized. 
-
-Eventually a better cmake package for this project will be created, but until then, just import it as a submodule, point cmake at the headers, and manaully add the source files needed. Each file will require particular pieces of the pico SDK to actually compile. I'm working on making this automatic.
-
-# Project Framework
-
-The following classes are based around creating the framework of a project: debugging, testing, persistant settings, and using pi pico built-in hardware features.
+Each header will require particular pieces of the pico SDK to actually compile. I'm working on making this automatic.
 
 ## Debug Logging
-### Logging.hpp
-Define the `LOGGING_ENABLED` macro to print logging to stdout, or clear it to have all logging message bypassed without any performance penalty.
-
-Defines `DEBUG_LOG` and `DEBUG_LOG_IF` macros. Use them like this:
-
 ```c++
+#include <cpp/Logging.hpp>
+#define LOGGING_ENABLED
+
 DEBUG_LOG("Plain message");
-
 DEBUG_LOG("Message will time out in " << timeoutMs << " ms");
-
 DEBUG_LOG_IF((returnCode != 0), "Something went wrong!");
 ```
 
-You'll probably want stdio enabled on some interface in your cmake file. I like USB.
+If you don't define `LOGGING_ENABLED`, logging is bypassed without any performance penalty. The strings aren't even compiled into your app.
+
+### About Standard Out on pico
+If you're new to the pico and you're wondering where these logs print: you choose UART or USB in your cmake file. 
 
 ```cmake
 pico_enable_stdio_usb(${PROJECT_NAME} 1)  # swap for uart
 pico_enable_stdio_uart(${PROJECT_NAME} 0)
 ```
 
-You'll also need to init stdio at the top of your main function. I like to also throw a little 2000 ms sleep in to give my terminal a chance to attach, to read debug messages printed by init code.
+You'll also need to init stdio at the top of your main function.
 
 ```c++
 int main()
@@ -52,70 +45,147 @@ int main()
 }
 ```
 
-## Remote Command Terminal
-### RemoteCommand.hpp (TBD)
-This module lets you use stdin as a simple command processor. Most useful when stdin is connected to USB or UART. 
+I like USB, as it presents the pico as a USB serial adapter to your PC. Use any terminal emulator to connect to the serial device.
 
-Commands have a name and optionally a series of params separated by spaces. You don't need to write any parsing code for parameters, so long as all the argument types can be assigned using `operator>>` from an istream. If the type cannot be assigned from `operator>>` you will get a compile error.
+## Command Parser
+This module lets you use stdin as a simple command processor.
 
-Here we add a command called "release" that powers off two servos. It takes in no parameters. The command has no return value, so its assumed it always succeeds.
 ```c++
+#include <cpp/CommandParser.hpp>
+
 CommandParser parser;
 parser.addCommand("release", [&]()
 {
   servoX.release();
   servoY.release();
-});
+}, "", "Power down all servos");
+
+// Main loop
+while(true)
+{
+  parser.processStdIo();
+}
 ```
 
-Here's a command that moves the servos to a specified position. This command also returns a bool, which should be true for success and false when the command fails. We bounds check the params and return false if they are out of range to avoid damaging the servos.
+Commands can take arguments, so long as all the argument types can be assigned using `operator>>` from an istream. You can also return true or false to indicate if your command ran ok.
+
 ```c++
-CommandParser parser;
-parser.addCommand("mt", [&](double xT, double yT)
+parser.addCommand("mt", [&](double x, double y)
 {
-  if (between(xT, 0.0, 1.0) &&
-      between(yT, 0.0, 1.0))
+  if (between(x, 0.0, 1.0) && between(y, 0.0, 1.0))
   {
-    servoX.posT(xT);
-    servoY.posT(yT);
-    return true;
+    servoX.posT(x);
+    servoY.posT(y);
+    return true; // returning true prints "ok"
   }
-  return false;
-});
+  return false; // returning false prints "err"
+}, "[x] [y]", "Move to (x, y)");
 ```
 
 This command is invoked from a connected terminal like this:
 >mt 0.43 1.0
 
-And that's it really. From the remote console, pressing tab fills in the last submitted command and delete should work ok depending on terminal settings. This is not a full terminal emulator by any means, it contains just enough features to act as a debug/programming interface and get a project going.
+Typing `help` lists all commands.
+
+```
+help
+
+Command Listing:
+
+    release              Power down all servos
+    mt [x] [y]           Move to (x, y)
+```
+
+This is not a full terminal emulator but it contains just enough features to act as a debug/programming interface and get a project going.
+
+## Flash Storage
+Saving settings or other data to flash memory on the pi pico is harder than it should be. This module lets you take a C++ data structure, then read or write it to flash, as a way of saving settings.
+
+```c++
+#include <cpp/FlashStorage.hpp>
+
+struct Settings
+{
+  float center = 0.0f;
+  bool autoShutoff = true;
+};
+
+FlashStorage<Settings> flashStorage;
+flashStorage.readFromFlash();
+flashStorage.data.autoShutoff = false;
+flashStorage.writeToFlash();
+```
+
+See the `FlashStorage.hpp` header for more technical details.
+
+> Note: Frequent writes to flash memory may reduce the lifespan of the pi pico. Write to flash memory infrequently (i.e.: a few times per day, not 100 times per second)
+
+## Button
+```c++
+#include <cpp/Button.hpp>
+
+// Button connects pin 2 to ground when pressed
+// Press and hold detection enabled
+GPIOButton button(2, true);
+
+// main loop
+while (1)
+{
+  button.update();
+  DEBUG_LOG_IF(button.buttonDown(), "button pressed");
+  DEBUG_LOG_IF(button.buttonUp(), "button released");
+  DEBUG_LOG_IF(button.heldActivate(), "button held (repeating)");
+}
+```
+
+> GPIO is only one type of Button. Anything with a fetchable boolean state can be a "Button". Make your own classes that inherit from Button.
+
+## DiscreteOut.hpp
+```c++
+#include <cpp/DiscreteOut.hpp>
+
+// Pin 1, pulls down by default
+DiscreteOut out1(1);
+out1.set(true);
+```
+> This is a light wrap of pico C API and mostly useful to skip looking up documentation.
+
+## Nintendo Peripherals
+### Nunchuck
+Wire a Wii Nunchuck to one of the i2c busses and go!
+
+```c++
+#include <cpp/Nunchuck.hpp>
+
+Nunchuck nunchuck(i2c1, 14, 15); // device, data, clock
+
+// Main loop
+while (true)
+{
+  nunchuck.requestControllerState();
+  // Nunchuck will take ~5ms to be ready for fetch
+  // so do stuff here if you want. Fetch will block
+  // if it needs to.
+  if (nunchuck.fetchControllerState())
+  {
+    if (nunchuck.c())
+    {
+      DEBUG_LOG("C button pressed");
+    }
+  }
+}
+
+> The C and Z buttons are actually the `Button` class from this library, so they have all those features.
+```
 
 ## Color
-### Color.hpp
 RGB and HSV color data structures with conversion and some basic processing functions like blend, gamma, multiply, add, and more. Great for calibrationg LED lights.
-
-## Math and Vectors
-
-## Settings and Flash
-Saving settings or other data to flash memory on the pi pico is a whole lot harder than it seems like it should be. These classes let you take a C++ data structure, then read or write it to flash, as a way of saving settings.
-
-> Note: Repeated writes to flash memory may reduce the lifespan of the pi pico. Write to flash memory infrequently (i.e.: a few times per day, not 100 times per second)
 
 ## WiFi
 Very simple class to bring up the wifi interface and connect it to a specified network. Hard coded to WPA2-PSK security. Needs more work to become useful and general purpose.
 
-### NTPSync.hpp
+## NTPSync.hpp
 Synchronize the pi pico system clock with an internet time server. Based on pi pico examples.
-
-# Peripheral Support
-
-The following classes are designed to help you connect specific pieces of hardware to the pi pico.
-
-## Input and Output
-### Button.hpp
-Create a polled button input from an input pin. Keeps track of state as well as transitions, double click, press and hold, and more. Really handy for making efficient use of limited physical buttons in projects.
-
-### DiscreteOut.hpp
-Create a single pin output. Set and get its level, configure pullup and pulldown simply. Light wrap of C API.
 
 ### PioProgram.hpp
 Manages instantiation and resources of pio programs and machines. Light wrapper of C API so you don't have to look up as much stuff.
@@ -135,10 +205,6 @@ Provides a virtual base class for dc motors. TBD: support with generic H bridge.
 Support for the adafruit Motorkit Hat. Communicates with motor controller via i2c. Construct and control 2 Stepper or 4 DCMotor objects.
 ### MotionXY.hpp
 Base class for a generic 2D motion stage. Implementations provided for a standard XY gantry and a Core XY belt driven stage. Provides basic homing and movement. Stages require 2 steppers and 2 buttons to construct.
-
-## Nintendo Peripherals
-### NintendoJoybus.hpp
-### NintendoI2C.hpp
 
 ## Individually Addressable LED (NeoPixel)
 Control a Ws2812b, NeoPixel, or other compatible chain of individually addressable LEDs. Just provide an I/O pin for the data line to set it up. Write an array of RGBColor stuctures to it. Brightness, color balance, and gamma correction are all supported to ensure uniform light output with the same input colors across different makes and models of LEDs

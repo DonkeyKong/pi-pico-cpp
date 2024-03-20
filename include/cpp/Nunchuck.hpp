@@ -1,6 +1,7 @@
 #pragma once
 
 #include "I2CInterface.hpp"
+#include "Button.hpp"
 #include "Logging.hpp"
 #include "Math.hpp"
 #include "Vector.hpp"
@@ -24,6 +25,10 @@ public:
     , nextActionTime_{get_absolute_time()}
     , connected_{false}
     , autoconnect_{autoconnect}
+    , c_{data_[5], 1, 0}
+    , z_{data_[5], 0, 0}
+    , c{c_}
+    , z{z_}
   {
     this->autoconnect();
   }
@@ -41,9 +46,9 @@ public:
     sleep_until(nextActionTime_);
     bool ok = true;
     DEBUG_LOG("Nunchuck connecting");
-    sleep_ms(5);
+    sleep_ms(TxRxInterval);
     ok &= (i2c_.write_blocking_until(Addr, Init1, 2, false, make_timeout_time_ms(TxRxTimeout)) == 2);
-    sleep_ms(5);
+    sleep_ms(TxRxInterval);
     ok &= (i2c_.write_blocking_until(Addr, Init2, 2, false, make_timeout_time_ms(TxRxTimeout)) == 2);
     if (ok)
     {
@@ -122,6 +127,11 @@ public:
   {
     autoconnect();
     readi2c(data_, 6);
+    if (connected_)
+    {
+      c_.update();
+      z_.update();
+    }
     return connected_;
   }
 
@@ -143,16 +153,6 @@ public:
   float stickY()
   {
     return std::clamp(normalize3Point(rawStickY(), stickYMin_, stickYCenter_, stickYMax_), -1.0f, 1.0f);
-  }
-
-  bool z()
-  {
-    return (data_[5] & 0x1) == 0;
-  }
-
-  bool c()
-  {
-    return ((data_[5] >> 1) & 0x1) == 0;
   }
   
   uint16_t rawAccelX()
@@ -185,26 +185,30 @@ public:
     return remap(rawAccelZ(), accelZ0g_, accelZ1g_, 0.0f, 1.0f);
   }
 
+  // In degrees
   float pitch()
   {
     Vec3f d{accelX(),accelY(),accelZ()};
     d = d.normalize();
-    return std::asin(-d.Y);
+    return std::asin(-d.Y) * (180.0f / M_PI);
   }
 
+  // In degrees
   float yaw()
   {
     Vec3f d{accelX(),accelY(),accelZ()};
     d = d.normalize();
-    return std::atan2(d.X, d.Z);
+    return std::atan2(d.X, d.Z) * (180.0f / M_PI);
   }
-
+  
 private:
   I2CInterface i2c_;
   absolute_time_t nextActionTime_;
   bool connected_;
   bool autoconnect_;
   uint8_t data_[6];
+  RegisterButton c_;
+  RegisterButton z_;
 
   // Cal data
   uint16_t accelX0g_ = 0;
@@ -253,4 +257,8 @@ private:
       }
     }
   }
+
+public:
+  const Button& c;
+  const Button& z;
 };

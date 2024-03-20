@@ -8,34 +8,46 @@ class Button
 public:
   virtual ~Button() = default;
 
-  bool pressed()
+  // Get if the button is currently pressed
+  bool operator()() const
   {
     return state_;
   }
 
-  uint32_t heldTimeMs()
+  // Get if the button is currently pressed
+  bool pressed() const
+  {
+    return state_;
+  }
+
+  // Get the number of ms the button has been pressed for or 0 if it's not being pressed
+  uint32_t heldTimeMs() const
   {
     if (!state_) return 0;
     return to_ms_since_boot(get_absolute_time()) - to_ms_since_boot(stateTime_);
   }
 
-  uint32_t releasedTimeMs()
+  // Get the number of ms the button has been released for or 0 if it's being pressed
+  uint32_t releasedTimeMs() const
   {
     if (state_) return 0;
     return to_ms_since_boot(get_absolute_time()) - to_ms_since_boot(stateTime_);
   }
 
-  bool heldActivate()
+  // Returns true after an update in which the button transitioned from being held for fewer
+  // than 1000ms to being held for more than 1000 ms. Returns false if update is called again,
+  // even if the button remains held.
+  bool heldActivate() const
   {
     return holdActivate_;
   }
 
-  bool buttonDown()
+  bool buttonDown() const
   {
     return state_ && !lastState_;
   }
   
-  bool buttonUp()
+  bool buttonUp() const
   {
     return !state_ && lastState_;
   }
@@ -144,4 +156,28 @@ public:
 
 private:
   uint32_t pin_;
+};
+
+class RegisterButton : public Button
+{
+public:
+  RegisterButton(uint8_t& reg, int bit, int highState = 1, bool enableHoldAction = false)
+    : Button(enableHoldAction)
+    , reg_(reg)
+    , bit_(bit)
+    , highState_(highState)
+  {
+    update();
+    lastState_ = state_;
+    stateTime_ = get_absolute_time();
+  }
+
+  virtual bool getButtonState() override
+  {
+    return ((reg_ >> bit_) & 0x1) == highState_;
+  }
+private:
+  uint8_t& reg_;
+  int bit_;
+  int highState_;
 };

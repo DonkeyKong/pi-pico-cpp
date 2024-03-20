@@ -24,6 +24,27 @@ float normalize3Point(T val, T negOne, T zero, T posOne)
   return 0.0f;
 }
 
+// In-place value clamping
+template <typename T>
+void clamp(T& val, T lo, T hi)
+{
+  val = std::clamp(val, lo, hi);
+}
+
+template <typename T>
+T moveTowards(T val, T dest, T inc)
+{
+  if (val < (dest-inc))
+  {
+    return val + inc;
+  }
+  if (val > (dest+inc))
+  {
+    return val - inc;
+  }
+  return dest;
+}
+
 template <typename InT, typename OutT>
 inline OutT remap(InT val, InT inA, InT inB, OutT outA, OutT outB)
 {
