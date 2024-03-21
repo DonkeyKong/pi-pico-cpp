@@ -1,6 +1,6 @@
 .program joybus_client
 
-; JoyBus reference:
+; Joybus reference:
 ; https://n64brew.dev/wiki/Joybus_Protocol
 
 ; Repeatedly get one word of data from the TX FIFO, stalling when the FIFO is

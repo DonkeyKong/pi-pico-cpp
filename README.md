@@ -3,9 +3,7 @@
 
 Jump right into making complex C++ projects with the pi pico, without spending forever reading docs or writing boilerplate.
 
-This repo is a work in progress. Some components are still being generalized. None of this code uses exceptions.
-
-Each header will require particular pieces of the pico SDK to actually compile. I'm working on making this automatic.
+This repo is a work in progress. Some components are still being generalized. Each header will require particular pieces of the pico SDK to actually compile.
 
 ## Debug Logging
 ```c++
@@ -122,6 +120,7 @@ See the `FlashStorage.hpp` header for more technical details.
 
 ## Button
 ```c++
+#include <cpp/Logging.hpp>
 #include <cpp/Button.hpp>
 
 // Button connects pin 2 to ground when pressed
@@ -155,6 +154,7 @@ out1.set(true);
 Wire a Wii Nunchuck to one of the i2c busses and go!
 
 ```c++
+#include <cpp/Logging.hpp>
 #include <cpp/Nunchuck.hpp>
 
 Nunchuck nunchuck(i2c1, 14, 15); // device, data, clock
@@ -175,37 +175,153 @@ while (true)
   }
 }
 
-> The C and Z buttons are actually the `Button` class from this library, so they have all those features.
+> 💡 The C and Z buttons are actually the `Button` class from this library, so they have all those features.
 ```
 
-## Color
-RGB and HSV color data structures with conversion and some basic processing functions like blend, gamma, multiply, add, and more. Great for calibrationg LED lights.
+### N64 Controller (Input)
+(TBI) Reads the state of an N64 controller, detecting button presses and stick movement.
 
-## WiFi
-Very simple class to bring up the wifi interface and connect it to a specified network. Hard coded to WPA2-PSK security. Needs more work to become useful and general purpose.
+### N64 Controller (Output)
+(TBI) Emulates an N64 controller and sends input to a real N64.
 
-## NTPSync.hpp
-Synchronize the pi pico system clock with an internet time server. Based on pi pico examples.
+### Joybus Host and Client
+(TBI) N64 controller support is built on top of a custom PIO implementation of the Joybus protocol. You can also use these joybus host and client classes to talk to other retro Nintendo hardware like gameboys (via link cable), or the gamecube.
 
-### PioProgram.hpp
-Manages instantiation and resources of pio programs and machines. Light wrapper of C API so you don't have to look up as much stuff.
+## Addressable LEDs (NeoPixel)
+Control a Ws2812b, NeoPixel, or other compatible chain of individually addressable LEDs.
 
-> Needs work and documentation to be useful general purpose. Mostly used as a base for other classes that support hardware via PIO
+```c++
+#include <cpp/LedStripWs2812b.hpp>
 
-## I2C Interface
+LEDBuffer buffer {{255,0,0}, {0,255,0}, {0,0,255}}; // RGB
+LedStripWs2812b leds = LedStripWs2812b::create(0); // GPIO 0
+leds.writeColors(buffer);
+```
+
+Be sure to generate the corresponding PIO header
+```cmake
+pico_generate_pio_header(${PROJECT_NAME} ${PI_PICO_CPP_DIR}/pio/ws2812b.pio)
+```
+
+> 💡 Brightness, color balance, and gamma correction are all supported to ensure uniform light output with the same LEDBuffer across different makes and models of LEDs. Check out the methods of LedStripWs2812b.
 
 ## Motors and Motion
-### Servo.hpp
-Provides an interface for servos connected directly to a GPIO pin. Properly sets up PWM for best resolution. Assumes 60 Hz update rate. Construct by specifying a pin and movement range. Set position using a float param 0-1, or degrees.
-### Stepper.hpp
-Provides a virtual base class for stepper motors. TBD: support with generic H bridges.
-### DCMotor.hpp
-Provides a virtual base class for dc motors. TBD: support with generic H bridge.
-### MotorKit.hpp
-Support for the adafruit Motorkit Hat. Communicates with motor controller via i2c. Construct and control 2 Stepper or 4 DCMotor objects.
-### MotionXY.hpp
-Base class for a generic 2D motion stage. Implementations provided for a standard XY gantry and a Core XY belt driven stage. Provides basic homing and movement. Stages require 2 steppers and 2 buttons to construct.
+### MotorKit
+Support for the [adafruit Motorkit Hat](https://www.adafruit.com/product/2348). Communicates with motor controller via i2c to drive steppers or DC motors.
 
-## Individually Addressable LED (NeoPixel)
-Control a Ws2812b, NeoPixel, or other compatible chain of individually addressable LEDs. Just provide an I/O pin for the data line to set it up. Write an array of RGBColor stuctures to it. Brightness, color balance, and gamma correction are all supported to ensure uniform light output with the same input colors across different makes and models of LEDs
+```c++
+#include <cpp/I2CInterface.hpp>
+#include <cpp/MotorKit.hpp>
+
+// Connect i2c interface 0 to GPIO pins 0 and 1 at 1 MHz
+// and construct the motor kit board
+I2CInterface i2c(i2c0, 0, 1, 1000000);
+MotorKit motorKit(i2c);
+
+// Connect a NEMA-17 stepper with:
+//    200 steps per rev
+//    8 microsteps
+//    230 rpm max speed
+//    reversed = true (motorkit seems to be nominally backwards)
+Stepper& stepper = *motors.connectStepper(0, {200, 8, 230, true});
+
+// Move 1 revolution in microsteps. Moves are always specified in usteps
+// for consistency, even when single or double stepping
+stepper.move(1600)
+
+// Move in degrees
+stepper.moveDegrees(360.0f)
+```
+
+### Motion Stage
+Create, home, and move a 2D stepper motor driven stage. Implementations available for direct drive and core XY stype stages.
+
+```c++
+#include <cpp/Button.hpp>
+#include <cpp/MotionXY.hpp>
+
+// Get stepper objects, perhaps from MotorKit
+Stepper& stepperA = getStepper(...);
+Stepper& stepperB = getStepper(...);
+
+// Connect some limit switches
+GPIOButton limSwitchX(0);
+GPIOButton limSwitchY(1);
+
+// Our steppers are 200 steps per revolution and GT2 pulleys
+// have 20 teeth spaced 2 mm apart: 200 / (20 * 2) = 5
+double stepsPerMm = 5.0;
+
+// Create a core XY stage and provide it all the hardware refs and information it needs.
+StageCoreXY stage(
+  stepperA, stepperB,       // Stepper motors to use for A and B belts
+  limSwitchX, limitSwitchY, // Limit switches for the X and Y axes
+  200.0, 200.0,             // Size of the X and Y axes in mm
+  5.0, 5.0,                 // Distance in mm from limit switches to 0,0
+  25.0,                     // Homing speed in mm/sec
+  stepsPerMm, stepsPerMm    // steps/mm of A,B belt movement
+);
+
+stage.home();
+
+// Move stage in a 100mm square at 60 mm/sec
+stage.moveTo(100.0, 0.0, 60.0);
+stage.moveTo(100.0, 100.0, 60.0);
+stage.moveTo(0.0, 100.0, 60.0);
+stage.moveTo(0.0, 0.0, 60.0);
+stage.completeAllMoves();
+```
+> ⚠️ Take care with your fingers
+
+### Servo
+Provides an interface for servos connected directly to a GPIO pin.
+
+```c++
+#include <cpp/Servo.hpp>
+
+// GPIO 0, motion range from -90º to 90º
+Servo servo(0, -90.0f, 90.0f);
+
+servo.posT(0.5); // Set normalized position, 0-1
+servo.posDeg(45.0); // Set position in degrees
+```
+
+> ⚠️ This class is hard coded to update the servo at 60 Hz, as this seems to be a generally accepted safe value for most servos and suitable for most applications.
+
+### Pico PWM Slicing
+The pico has 16 PWM outputs, they are aliased across its GPIO pins, and this is *not explained well in the docs*.
+
+| Slice |  Out A  |  Out B  |  Out A* |  Out B* |
+|-------|---------|---------|---------|---------|
+|     0 | GPIO 0  | GPIO 1  | GPIO 16 | GPIO 17 |
+|     1 | GPIO 2  | GPIO 3  | GPIO 18 | GPIO 19 |
+|     2 | GPIO 4  | GPIO 5  | GPIO 20 | GPIO 21 |
+|     3 | GPIO 6  | GPIO 7  | GPIO 22 | GPIO 23 |
+|     4 | GPIO 8  | GPIO 9  | GPIO 24 | GPIO 25 |
+|     5 | GPIO 10 | GPIO 11 | GPIO 26 | GPIO 27 |
+|     6 | GPIO 12 | GPIO 13 | GPIO 28 | GPIO 29 |
+|     7 | GPIO 14 | GPIO 15 |   N/A   |   N/A   |
+
+Outputs on the same slice share the same clock divider and wrap (so they have the same frequency). Since all servos update at 60Hz this does not matter for them but it affects other PWM usage.
+
+Outputs A/A* and B/B* share the same PWM hardware, so attempting to setup e.g.: GPIO 0 and GPIO 16 for PWM usage at the same time will result in the same output on both pins!
+
+## WiFi
+(TBI) Very simple class to bring up the wifi interface and connect it to a specified network. Hard coded to WPA2-PSK security. Needs more work to become useful and general purpose.
+
+## NTPSync.hpp
+(TBI) Synchronize the pi pico system clock with an internet time server. Based on pi pico examples.
+
+## PioProgram.hpp
+(TBD) Document and generalize
+
+## I2C Interface
+(TBD) Document and generalize
+
+## Utility Headers
+`Color.hpp` -- RGB and HSV color data structures with conversion and some basic processing functions like blend, gamma, multiply, add, and more
+
+`Math.hpp` -- Basic math utils for clamping, interpolation, crawling values, etc
+
+`Vector.hpp` -- Templated implementations of vector types
 
