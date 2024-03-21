@@ -5,8 +5,6 @@
 #include <cmath>
 #include <deque>
 
-
-
 class Stage2D
 {
   template <typename T>

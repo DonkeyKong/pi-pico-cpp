@@ -19,9 +19,25 @@ class Nunchuck
   static constexpr uint8_t StateRegister[] {0x00};
   static constexpr uint8_t CalibRegister[] {0x20};
 
+  static constexpr int I2CBaud = 100000;
+
 public:
+  Nunchuck(I2CInterface& i2c, bool autoconnect = true)
+    : i2c_{i2c}
+    , nextActionTime_{get_absolute_time()}
+    , connected_{false}
+    , autoconnect_{autoconnect}
+    , c_{data_[5], 1, 0}
+    , z_{data_[5], 0, 0}
+    , c{c_}
+    , z{z_}
+  {
+    this->autoconnect();
+  }
+
   Nunchuck(i2c_inst_t* i2cInst, uint dataPin, uint clkPin, bool autoconnect = true)
-    : i2c_{i2cInst, 14, 15}
+    : ownedi2c_(std::make_unique<I2CInterface>(i2cInst, dataPin, clkPin, I2CBaud))
+    , i2c_{*ownedi2c_.get()}
     , nextActionTime_{get_absolute_time()}
     , connected_{false}
     , autoconnect_{autoconnect}
@@ -202,7 +218,8 @@ public:
   }
   
 private:
-  I2CInterface i2c_;
+  std::unique_ptr<I2CInterface> ownedi2c_;
+  I2CInterface& i2c_;
   absolute_time_t nextActionTime_;
   bool connected_;
   bool autoconnect_;

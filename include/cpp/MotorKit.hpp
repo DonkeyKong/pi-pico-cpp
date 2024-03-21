@@ -17,6 +17,7 @@ class MotorKit
   friend class MotorKitStepper;
 public:
   MotorKit(I2CInterface& i2c, uint8_t devAddr = 0x60, double pwmFrequency = 1600.0f);
+  MotorKit(i2c_inst_t* i2cInst, uint dataPin, uint clkPin, uint8_t devAddr = 0x60, double pwmFrequency = 1600.0f);
   MotorKit(const MotorKit&) = delete;
   MotorKit(MotorKit&&) = delete;
   ~MotorKit() = default;
@@ -44,6 +45,8 @@ public:
   DCMotor* getDc(int id);
 
 private:
+  std::unique_ptr<I2CInterface> ownedi2c_;
+
   // Chip function registers
   I2CRegister<uint8_t> mode1_;
   I2CRegister<uint8_t> mode2_;
@@ -54,9 +57,12 @@ private:
   std::unique_ptr<Stepper> steppers_[2];
   std::unique_ptr<DCMotor> dcs_[4];
 
+  void setup(I2CInterface& i2c, uint8_t devAddr, double pwmFrequency);
+
   // We are driving motors using a PCA9685 LED controller
   // Below are some hardware mappings and info for this chip
   static constexpr int PCA9685ClockSpeed = 25000000; // 25 MHz
+  static constexpr int I2CBaud = 1000000; // 1 MHz
   static uint8_t getBaseAddrForChannel(uint8_t ch)
   {
     // Per the PCA9685 datasheet
@@ -405,6 +411,20 @@ MotorKit::MotorKit(I2CInterface& i2c, uint8_t devAddr, double pwmFrequency)
   : mode1_(i2c, devAddr, 0x00)
   , mode2_(i2c, devAddr, 0x01)
   , prescale_(i2c, devAddr, 0xFE)
+{
+  setup(i2c, devAddr, pwmFrequency);
+}
+
+MotorKit::MotorKit(i2c_inst_t* i2cInst, uint dataPin, uint clkPin, uint8_t devAddr, double pwmFrequency)
+  : ownedi2c_(std::make_unique<I2CInterface>(i2cInst, dataPin, clkPin, I2CBaud))
+  , mode1_(*ownedi2c_.get(), devAddr, 0x00)
+  , mode2_(*ownedi2c_.get(), devAddr, 0x01)
+  , prescale_(*ownedi2c_.get(), devAddr, 0xFE)
+{
+  setup(*ownedi2c_.get(), devAddr, pwmFrequency);
+}
+
+void MotorKit::setup(I2CInterface& i2c, uint8_t devAddr, double pwmFrequency)
 {
   DEBUG_LOG("Setting up MotorKit board...");
 

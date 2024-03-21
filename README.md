@@ -210,13 +210,10 @@ pico_generate_pio_header(${PROJECT_NAME} ${PI_PICO_CPP_DIR}/pio/ws2812b.pio)
 Support for the [adafruit Motorkit Hat](https://www.adafruit.com/product/2348). Communicates with motor controller via i2c to drive steppers or DC motors.
 
 ```c++
-#include <cpp/I2CInterface.hpp>
 #include <cpp/MotorKit.hpp>
 
-// Connect i2c interface 0 to GPIO pins 0 and 1 at 1 MHz
-// and construct the motor kit board
-I2CInterface i2c(i2c0, 0, 1, 1000000);
-MotorKit motorKit(i2c);
+// Use i2c interface 0 on GPIO pins 0 and 1
+MotorKit motorKit(i2c0, 0, 1);
 
 // Connect a NEMA-17 stepper with:
 //    200 steps per rev
