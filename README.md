@@ -1,10 +1,24 @@
 # Pi Pico C++
-*C++ wrappers, drivers, and utils for pi pico*
+*C++ prototyping tools for pi pico*
 
-Jump right into making complex C++ projects with the pi pico, without spending forever reading docs or writing boilerplate.
+![pico with c++ logo](docs/logo.png)
 
-This repo is a work in progress. Some components are still being generalized. Each header will require particular pieces of the pico SDK to actually compile.
+Make complex C++ projects for the pi pico without all the boilerplate. Jump right into talking to hardware and reacting to user input, without reading API docs or writing boilerplate.
 
+> This repo is a work in progress. Some components are still being generalized. Each header requires different pieces of the pico SDK. This will eventually be automated.
+
+# Getting Started
+1. Install [Visual Studio Code](https://code.visualstudio.com/Download) and [Docker](https://www.docker.com/products/docker-desktop/)
+2. Clone the [sample project repo](https://github.com/DonkeyKong/ppc-sample-project)
+    - Fetch all submodules recursively
+3. Open the folder `ppc-sample-project` in vscode
+    - When prompted, click "Reopen In Container"
+    - Choose the `arm-none-eabi` toolchain when prompted
+4. Click Build
+
+From here you can customize the sample project however you like. Note that while this is the easiest path for a beginner, the `pico-sdk` submodule is enormous so if you do a lot of development, you'll want to find a better way than having a full copy for every project.
+
+# Modules
 ## Debug Logging
 ```c++
 #include <cpp/Logging.hpp>
