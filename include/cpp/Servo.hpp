@@ -7,7 +7,7 @@
 
 class Servo
 {
-  static constexpr uint64_t pwmFreqHz = 120;
+  static constexpr uint64_t pwmFreqHz = 60;
 
   // Determine the best integer value clock divider given our desired pwmFreq
   // and the 16 bit limit of the pwm wrap register
@@ -41,7 +41,7 @@ public:
     slice_ = pwm_gpio_to_slice_num(pin_);
 
     // Set the wrap and clock divider
-    pwm_set_clkdiv_int_frac(slice_, pwmClockDiv, 0); 	
+    pwm_set_clkdiv_int_frac(slice_, pwmClockDiv, 0);
     pwm_set_wrap(slice_, pwmWrap);
 
     // Just in case...
@@ -75,6 +75,11 @@ public:
   // Set the servo position as a float 0 to 1
   void posT(double t)
   {
+    if (invert)
+    {
+      t = 1.0f - t;
+    }
+
     if (oobAction == OutOfBoundsBehavior::NoMove)
     {
       if (t < 0.0f || t > 1.0f)
@@ -86,11 +91,6 @@ public:
     else if (oobAction == OutOfBoundsBehavior::Clip)
     {
       clamp(t, 0.0, 1.0);
-    }
-
-    if (invert)
-    {
-      t = 1.0f - t;
     }
 
     uint16_t cyclesOn = (uint16_t)(((double)pwmRangeUs_ * t + (double)pwmMinUs_) * 1000.0 / (double)nsPerPwmTick);
@@ -111,6 +111,7 @@ public:
     {
       clamp(deg, (double)minDeg_, (double)maxDeg_);
     }
+    
     posT((deg - minDeg_) / (maxDeg_ - minDeg_));
   }
 

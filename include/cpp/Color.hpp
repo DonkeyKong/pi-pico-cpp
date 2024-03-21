@@ -54,6 +54,11 @@ struct RGBColor
     return { (uint8_t)R, (uint8_t)G, (uint8_t)B };
   }
 
+  Vec3f toVec3f() const
+  {
+    return {(float)R / 255.0f, (float)G / 255.0f, (float)B / 255.0f};
+  }
+
   HSVColor toHSV() const;
   LabColor toLab() const;
   uint8_t getBrightestChannel() const;
