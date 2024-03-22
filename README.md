@@ -3,20 +3,22 @@
 
 ![pico with c++ logo](docs/logo.png)
 
-Make complex C++ projects for the pi pico without all the boilerplate. Jump right into talking to hardware and reacting to user input, without reading API docs or writing boilerplate.
+Make complex C++ projects for the pi pico without all the boilerplate. Jump right into talking to hardware and reacting to user input, without reading a tons of docs or writing tons of code.
 
 > This repo is a work in progress. Some components are still being generalized. Each header requires different pieces of the pico SDK. This will eventually be automated.
 
 # Getting Started
-1. Install [Visual Studio Code](https://code.visualstudio.com/Download) and [Docker](https://www.docker.com/products/docker-desktop/)
-2. Clone the [sample project repo](https://github.com/DonkeyKong/ppc-sample-project)
-    - Fetch all submodules recursively
-3. Open the folder `ppc-sample-project` in vscode
-    - When prompted, click "Reopen In Container"
-    - Choose the `arm-none-eabi` toolchain when prompted
-4. Click Build
+This process should work the same in macOS, Windows, and Linux
 
-From here you can customize the sample project however you like. Note that while this is the easiest path for a beginner, the `pico-sdk` submodule is enormous so if you do a lot of development, you'll want to find a better way than having a full copy for every project.
+1. Install [Visual Studio Code](https://code.visualstudio.com/Download) and [Docker](https://www.docker.com/products/docker-desktop/)
+2. Clone the [pico-sdk](https://github.com/raspberrypi/pico-sdk)
+3. Next to this on disk, clone the [sample project repo](https://github.com/DonkeyKong/ppc-sample-project) (or your own fork of it)
+4. Open Folder... `ppc-sample-project` in vscode
+    - When prompted, click `Reopen In Container`
+    - Choose the `GCC 8.3.1 arm-none-eabi` toolchain when prompted
+5. Click Build
+
+The project should build and you can deploy the .uf2 file to a pico if you want. From here, just start building on top of the sample project.
 
 # Modules
 ## Debug Logging
@@ -29,7 +31,7 @@ DEBUG_LOG("Message will time out in " << timeoutMs << " ms");
 DEBUG_LOG_IF((returnCode != 0), "Something went wrong!");
 ```
 
-If you don't define `LOGGING_ENABLED`, logging is bypassed without any performance penalty. The strings aren't even compiled into your app.
+If you don't define `LOGGING_ENABLED`, logging is bypassed without any performance or size penalty. The strings aren't even compiled into your app.
 
 ### About Standard Out on pico
 If you're new to the pico and you're wondering where these logs print: you choose UART or USB in your cmake file. 
@@ -130,7 +132,7 @@ flashStorage.writeToFlash();
 
 See the `FlashStorage.hpp` header for more technical details.
 
-> Note: Frequent writes to flash memory may reduce the lifespan of the pi pico. Write to flash memory infrequently (i.e.: a few times per day, not 100 times per second)
+> ⚠️ Frequent writes to flash memory may reduce the lifespan of the pi pico. Write to flash memory infrequently (i.e.: a few times per day, not 100 times per second)
 
 ## Button
 ```c++
@@ -210,11 +212,6 @@ Control a Ws2812b, NeoPixel, or other compatible chain of individually addressab
 LEDBuffer buffer {{255,0,0}, {0,255,0}, {0,0,255}}; // RGB
 LedStripWs2812b leds = LedStripWs2812b::create(0); // GPIO 0
 leds.writeColors(buffer);
-```
-
-Be sure to generate the corresponding PIO header
-```cmake
-pico_generate_pio_header(${PROJECT_NAME} ${PI_PICO_CPP_DIR}/pio/ws2812b.pio)
 ```
 
 > 💡 Brightness, color balance, and gamma correction are all supported to ensure uniform light output with the same LEDBuffer across different makes and models of LEDs. Check out the methods of LedStripWs2812b.
