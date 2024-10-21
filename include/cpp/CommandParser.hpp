@@ -25,6 +25,7 @@ private:
   int pos = 0;
   std::string lastCmd;
   std::map<std::string, Command> commands;
+  bool echoOn = true;
 
   template <typename T>
   static T parseArgFromStream(std::istream& ss)
@@ -67,6 +68,7 @@ public:
   CommandParser()
   {
     addCommand("help", [this](){ printHelp(); }, "", "Print this help information");
+    addCommand("echo", [this](bool enable){ echo(enable); }, "", "Enable or disable comms echo");
   }
 
   void printHelp()
@@ -81,6 +83,11 @@ public:
                 << (cmd.help.empty() ? "No help string provided" : cmd.help) << std::endl;
     }
     std::cout << std::endl;
+  }
+
+  void echo(bool enable)
+  {
+    echoOn = enable;
   }
 
   // Add a command with the given name, that executes a given
@@ -106,24 +113,24 @@ public:
       if (inchar > 31 && inchar < 127 && pos < 1023)
       {
         inBuf[pos++] = (char)inchar;
-        std::cout << (char)inchar << std::flush; // echo to client
+        if (echoOn) std::cout << (char)inchar << std::flush; // echo to client
       }
       else if (inchar == '\b' && pos > 0) // handle backspaces
       {
         --pos;
-        std::cout << "\b \b" << std::flush;
+        if (echoOn) std::cout << "\b \b" << std::flush;
       }
       else if (inchar == '\t' && lastCmd.size() < 1023) // handle tab to insert last command
       {
-        while (pos-- > 0) std::cout << "\b \b" << std::flush;
+        if (echoOn) while (pos-- > 0) std::cout << "\b \b" << std::flush;
         memcpy(inBuf, lastCmd.data(), lastCmd.size());
         pos = lastCmd.size();
-        std::cout << lastCmd << std::flush;
+        if (echoOn) std::cout << lastCmd << std::flush;
       }
       else if (inchar == '\n')
       {
         inBuf[pos] = '\0';
-        std::cout << std::endl; // echo to client
+        if (echoOn) std::cout << std::endl; // echo to client
         lastCmd = inBuf;
         processCommand(inBuf);
         pos = 0;
@@ -147,15 +154,15 @@ public:
       {
         if (cmd.func(ss))
         {
-          std::cout << "ok" << std::endl;
+          std::cout << "[ok]" << std::endl;
         }
         else
         {
-          std::cout << "err" << std::endl;
+          std::cout << "[fail]" << std::endl;
         }
         return;
       }
     }
-    std::cout << "unknown command error" << std::endl;
+    std::cout << "[err]" << std::endl;
   }
 };
