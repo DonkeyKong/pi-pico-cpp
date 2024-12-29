@@ -33,6 +33,16 @@ struct RGBColor
     return {(uint8_t)(c*R), (uint8_t)(c*G), (uint8_t)(c*B)};
   }
 
+  bool operator== (const RGBColor& c) const
+  {
+    return R == c.R && G == c.G && B == c.B;
+  }
+
+  bool operator!= (const RGBColor& c) const
+  {
+    return R != c.R || G != c.G || B != c.B;
+  }
+
   RGBColor operator* (const Vec3f& c) const
   {
     return {(uint8_t)std::clamp(c.X*R, 0.0f, 255.0f), (uint8_t)std::clamp(c.Y*G, 0.0f, 255.0f), (uint8_t)std::clamp(c.Z*B, 0.0f, 255.0f)};

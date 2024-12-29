@@ -89,6 +89,11 @@ public:
     }
   }
 
+  void holdActivationtMs(int val)
+  {
+    holdActivationMs_ = val;
+  }
+
   void holdActivationRepeatMs(int val)
   {
     holdActivationRepeatMs_ = val;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Logging.hpp"
 #include "Color.hpp"
 #include "PioProgram.hpp"
 #include "ws2812b.pio.h"
@@ -41,14 +42,14 @@ public:
   inline void writeColors(const LEDBuffer& buffer, float brightness = 1.0f)
   {
     RGBColor calibrated;
-    uint32_t data;
+    uint32_t data = 0;
     // Send the colors
     for (int i=0; i < buffer.size(); ++i)
     {
       // Format the color for I/O
       calibrated = buffer[i] * colorBalance_ * brightness;
       calibrated.applyGamma(gamma_);
-      data = calibrated.G << 16 | calibrated.R << 8 | calibrated.B;
+      data = (uint32_t)calibrated.G << 16 | (uint32_t)calibrated.R << 8 | (uint32_t)calibrated.B;
       pio_sm_put_blocking(pio_, sm_, data);
     }
     // Send a reset when done
