@@ -6,8 +6,13 @@
 #include <istream>
 #include <sstream>
 #include <string>
+#include <cstring>
 #include <map>
 #include <functional>
+
+// Pico SDK headers
+#include <pico/stdlib.h>
+#include <pico/stdio.h>
 
 class CommandParser
 {
@@ -109,7 +114,7 @@ public:
   {
     while (true)
     {
-      int inchar = getchar_timeout_us(0);
+      int inchar = stdio_getchar_timeout_us(0);
       if (inchar > 31 && inchar < 127 && pos < 1023)
       {
         inBuf[pos++] = (char)inchar;
@@ -123,7 +128,7 @@ public:
       else if (inchar == '\t' && lastCmd.size() < 1023) // handle tab to insert last command
       {
         if (echoOn) while (pos-- > 0) std::cout << "\b \b" << std::flush;
-        memcpy(inBuf, lastCmd.data(), lastCmd.size());
+        std::memcpy(inBuf, lastCmd.data(), lastCmd.size());
         pos = lastCmd.size();
         if (echoOn) std::cout << lastCmd << std::flush;
       }
