@@ -35,19 +35,19 @@ int main()
   settings.readFromFlash();
 
   CommandParser parser;
-  parser.addCommand("set", [&](std::string str)
+  parser.addCommand("set", "string", "Set the persistent string", [&](std::string str)
   {
     if (str.size() < 256)
     {
       strcpy(settings.data.persistentString, str.c_str());
       settings.writeToFlash();
     }
-  }, "string", "Set the persistent string");
+  });
 
-  parser.addCommand("get", [&]()
+  parser.addCommand("get", "", "Get the persistent string", [&]()
   {
     std::cout << settings.data.persistentString << "\n";
-  }, "", "Get the persistent string");
+  });
 
   while(true)
   {

@@ -4,13 +4,23 @@
 #include "PwmOut.hpp"
 #include "PulseCounter.hpp"
 
+// A class to manage 4-pin fans with a PWM and tachometer.
+// Call "update()" in a loop, at least once per second, to get
+// valid RPM values. These update once per second and average over 3 observations
+// for stability (it's still not that stable)
+//
+// Choices in this file, like PWM freqency and pullup on the tach pin come
+// from the Noctua white paper specification on 4-pin fans
+// https://noctua.at/pub/media/wysiwyg/Noctua_PWM_specifications_white_paper.pdf
 class Fan
 {
   // PC fans want a nominal PWM frequency of 25kHz
   static constexpr uint64_t fanPwmFreqHz = 25000;
+
+  // Collect an RPM sample every one second (can be changed, lower values will be more noisy)
   static constexpr float tachSamplePeriodMs = 1000.0f;
   static constexpr float samplesPerSecond = 1000.0f / tachSamplePeriodMs;
-  static constexpr int tachSampleCount = 3;
+  static constexpr int tachSampleCount = 3; // Average RPM measurements over 3 samples
   static constexpr float convFactor = samplesPerSecond * 60.0f / 2.0f / (float)tachSampleCount;
 
   PwmOut pwm_;

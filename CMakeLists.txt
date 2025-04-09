@@ -47,3 +47,4 @@ include_directories(include)
 # Build all the examples
 add_subdirectory(examples/logging)
 add_subdirectory(examples/flash)
+add_subdirectory(examples/fan_controller)
