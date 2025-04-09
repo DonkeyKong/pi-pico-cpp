@@ -1,0 +1,42 @@
+.program pulse_counter
+
+; This program counts pulses on a single input pin
+; It only counts a pulse if both positive and negative
+; edges are seen.
+
+; AUTOPUSH on
+; AUTOPULL off
+
+PULL block  ; Wait for a sample period to come in
+            ; We must have one no matter what at the start
+
+.wrap_target
+  MOV X OSR ; Copy the sample period to the X register
+            ; but keep the value in OSR for storage.
+
+wait_for_rise:
+  JMP X-- wait_for_rise_loop  ; extra time-- to make up for the cycle spent updating count
+  JMP report_count
+
+wait_for_rise_loop:
+  JMP PIN wait_for_fall   ; if PIN high, goto wait_for_fall
+  JMP X-- wait_for_rise_loop   ; if time is not up, keep waiting for high
+  JMP report_count        ; time is up, report count
+
+wait_for_fall:
+  JMP X-- wait_for_fall_loop
+  JMP report_count
+
+wait_for_fall_loop:
+  JMP PIN keep_waiting_for_fall ; if pin is high, goto keep_waiting_for_fall
+  JMP Y-- check_keep_counting   ; if pin is low, update count
+check_keep_counting:
+  JMP X-- wait_for_rise         ; if time is not up, go back to waiting for a rising edge
+  JMP report_count              ; if time is up, report count
+keep_waiting_for_fall:
+  JMP X-- wait_for_fall_loop         ; if time is not up, keep waiting for low
+
+report_count:
+  IN Y 32         ; Report the count in Y (it should autopush)
+  SET Y 0
+.wrap

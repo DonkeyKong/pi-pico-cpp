@@ -23,18 +23,18 @@ The project should build and you can deploy the .uf2 file to a pico if you want.
 # Modules
 ## Debug Logging
 ```c++
-#include <cpp/Logging.hpp>
 #define LOGGING_ENABLED
+#include <cpp/Logging.hpp>
 
 DEBUG_LOG("Plain message");
 DEBUG_LOG("Message will time out in " << timeoutMs << " ms");
 DEBUG_LOG_IF((returnCode != 0), "Something went wrong!");
 ```
 
-If you don't define `LOGGING_ENABLED`, logging is bypassed without any performance or size penalty. The strings aren't even compiled into your app.
+If you don't define `LOGGING_ENABLED`, logging is bypassed without any performance or size penalty. The strings aren't even compiled into your app. Be sure to define the directive before including `Logging.hpp` for the first time. Adding the define in cmake is easiest.
 
 ### About Standard Out on pico
-If you're new to the pico and you're wondering where these logs print: you choose UART or USB in your cmake file. 
+If you're new to the pico and you're wondering where these logs print, they go to stdout. Where stdout goes depends on settings in your cmake file. You can choose USB or UART.
 
 ```cmake
 pico_enable_stdio_usb(${PROJECT_NAME} 1)  # swap for uart
@@ -210,7 +210,7 @@ Control a Ws2812b, NeoPixel, or other compatible chain of individually addressab
 #include <cpp/LedStripWs2812b.hpp>
 
 LEDBuffer buffer {{255,0,0}, {0,255,0}, {0,0,255}}; // RGB
-LedStripWs2812b leds = LedStripWs2812b::create(0); // GPIO 0
+LedStripWs2812b leds(0); // LED data pin is on GPIO 0
 leds.writeColors(buffer);
 ```
 

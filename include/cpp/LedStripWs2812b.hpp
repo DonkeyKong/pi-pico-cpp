@@ -27,16 +27,30 @@ public:
     int index;
   };
 
-  static LedStripWs2812b create(uint pin)
+  LedStripWs2812b(uint pin) : PioMachine(&ws2812b_program)
   {
-    std::shared_ptr<PioProgram> prog = prog_.lock();
-    if (!prog)
-    {
-      // TBD: support autoselection of pio0 and pio1
-      prog = std::make_shared<PioProgram>(pio0, &ws2812b_program);
-      prog_ = prog;
-    }
-    return LedStripWs2812b(prog, pin);
+    uint offset = prog_->offset();
+    pio_sm_config c = ws2812b_program_get_default_config(offset);
+
+    // Map the state machine's i/o pin groups to one pin, namely the `pin`
+    sm_config_set_in_pins(&c, pin);
+    sm_config_set_out_pins(&c, pin, 1);
+    sm_config_set_set_pins(&c, pin, 1);
+    sm_config_set_jmp_pin(&c, pin);
+
+    sm_config_set_in_shift(&c, false, false, 32);
+    sm_config_set_out_shift(&c, false, false, 32);
+    
+    // Set this pin's GPIO function (connect PIO to the pad)
+    pio_gpio_init(pio_, pin);
+    // Set the pin direction to input at the PIO
+    pio_sm_set_consecutive_pindirs(pio_, sm_, pin, 1, true);
+    sm_config_set_clkdiv(&c, 5.0f);
+
+    // Load our configuration, and jump to the start of the program
+    pio_sm_init(pio_, sm_, offset, &c);
+    // Set the state machine running
+    pio_sm_set_enabled(pio_, sm_, true);
   }
 
   inline void writeColors(const LEDBuffer& buffer, float brightness = 1.0f)
@@ -101,11 +115,6 @@ public:
   }
 
 private:
-  static std::weak_ptr<PioProgram> prog_;
   Vec3f colorBalance_ {1.0f, 1.0f, 1.0f};
   float gamma_ {1.0f};
-  LedStripWs2812b(std::shared_ptr<PioProgram>& prog, uint pin) :
-    PioMachine(prog, ws2812b_program_init, pin, 5.0) {}
 };
-
-std::weak_ptr<PioProgram> LedStripWs2812b::prog_;

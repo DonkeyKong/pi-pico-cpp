@@ -8,76 +8,139 @@
 #include <vector>
 #include <iostream>
 
-using ConfigFuncPtr = pio_sm_config (*)(PIO pio, uint stateMachine, uint offset, uint pin, float clkdiv);
-
-class PioProgram
-{
-public:
-  PioProgram(const PIO& pio, const pio_program* prog)
-  {
-    // Load the PIO program
-    pio_ = pio;
-    prog_ = prog;
-    offset_ = pio_add_program(pio_, prog_);
-    loaded_ = true;
-  }
-
-  ~PioProgram()
-  {
-    if (loaded_)
-    {
-      pio_remove_program(pio_, prog_, offset_);
-    }
-    loaded_ = false;
-  }
-
-  PIO pio()
-  {
-    return pio_;
-  }
-
-  uint offset()
-  {
-    return offset_;
-  }
-
-  // Cannot copy or move
-  PioProgram(const PioProgram& o) = delete;
-  PioProgram(PioProgram&& other) = delete;
-  PioProgram& operator=(PioProgram&& other) = delete;
-
-private:
-  const pio_program* prog_;
-  PIO pio_;
-  uint offset_;
-  bool loaded_ = false;
-};
-
 class PioMachine
 {
-public:
-  
-  PioMachine() = default;
-  
-  PioMachine(std::shared_ptr<PioProgram>& prog, ConfigFuncPtr configFunc, uint pin, float clkdiv = 16.625f)
+  class PioProgram
   {
-    // Load and start the PIO program
-    prog_ = prog;
-    pio_ = prog_->pio();  // Used so frequently we have to cache it
-    sm_ = pio_claim_unused_sm(pio_, true);
-    config_ = configFunc(pio_, sm_, prog_->offset(), pin, clkdiv);
-    loaded_ = true;
-  }
-
-  ~PioMachine()
-  {
-    if (loaded_)
+  public:
+    PioProgram(const PIO& pio, const pio_program* prog)
     {
-      pio_sm_unclaim(pio_, sm_);
+      // Load the PIO program
+      pio_ = pio;
+      prog_ = prog;
+      offset_ = pio_add_program(pio_, prog_);
+      loaded_ = true;
     }
-    loaded_ = false;
+  
+    ~PioProgram()
+    {
+      if (loaded_)
+      {
+        pio_remove_program(pio_, prog_, offset_);
+      }
+      loaded_ = false;
+    }
+  
+    PIO pio() const
+    {
+      return pio_;
+    }
+  
+    uint offset() const
+    {
+      return offset_;
+    }
+
+    const pio_program* program() const
+    {
+      return prog_;
+    }
+  
+    // Cannot copy or move
+    PioProgram(const PioProgram& o) = delete;
+    PioProgram(PioProgram&& other) = delete;
+    PioProgram& operator=(PioProgram&& other) = delete;
+  
+  private:
+    const pio_program* prog_;
+    PIO pio_;
+    uint offset_;
+    bool loaded_ = false;
+  };
+
+  // Static collection of all loaded program instances
+  static std::vector<std::weak_ptr<PioProgram>> cachedPrograms;
+
+  static void cleanupUnloadedPrograms()
+  {
+    // get rid of any dead weak ptrs
+    cachedPrograms.erase(std::remove_if(cachedPrograms.begin(), cachedPrograms.end(), [](std::weak_ptr<PioProgram> prog) 
+    {
+      return prog.expired();
+    }), cachedPrograms.end());
   }
 
+  static bool pioHasFreeStateMachine(PIO pio)
+  {
+    uint sm = pio_claim_unused_sm(pio, false);
+    pio_sm_unclaim(pio, sm);
+    return sm >= 0;
+  }
+
+  static bool pioInstanceHasProgramLoaded(PIO pio, const pio_program* prog)
+  {
+    for (const auto weakPioProgPtr : cachedPrograms)
+    {
+      auto pioProgPtr = weakPioProgPtr.lock();
+      if (pioProgPtr->program() == prog && pioProgPtr->pio() == pio)
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Load a program on to a PIO core that doesn't already have a copy
+  static std::shared_ptr<PioProgram> loadProgram(const pio_program* prog)
+  {
+    for (int i = 0; i < NUM_PIOS; ++i)
+    {
+      PIO pio = PIO_INSTANCE(i);
+      if (pioHasFreeStateMachine(pio) && !pioInstanceHasProgramLoaded(pio, prog))
+      {
+        auto pm = std::make_shared<PioProgram>(pio, prog);
+        cachedPrograms.push_back(pm);
+        return pm;
+      }
+    }
+    return nullptr;
+  }
+
+protected:  
+  PioMachine(const pio_program* prog)
+  {
+    cleanupUnloadedPrograms();
+
+    // Look in the static collection and try claiming a state machine
+    // on an existing PIO core
+    for (const auto weakPioProgPtr : cachedPrograms)
+    {
+      auto pioProgPtr = weakPioProgPtr.lock();
+      if (pioProgPtr->program() == prog && pioHasFreeStateMachine(pioProgPtr->pio()))
+      {
+        prog_ = pioProgPtr;
+        pio_ = prog_->pio();
+        sm_ = pio_claim_unused_sm(pio_, true);
+        loaded_ = true;
+        break;
+      }
+    }
+
+    // If no free state machines were found, try loading it on any core
+    // that doesn't already have it
+    if (!loaded_)
+    {
+      prog_ = loadProgram(prog);
+      if (prog_)
+      {
+        pio_ = prog_->pio();
+        sm_ = pio_claim_unused_sm(pio_, true);
+        loaded_ = true;
+      }
+    }
+  }
+
+public:
   PioMachine(const PioMachine& o) = delete;
 
   PioMachine(PioMachine&& other):
@@ -89,6 +152,15 @@ public:
   {
     other.prog_.reset();
     other.loaded_ = false;
+  }
+
+  ~PioMachine()
+  {
+    if (loaded_)
+    {
+      pio_sm_unclaim(pio_, sm_);
+    }
+    loaded_ = false;
   }
 
   PioMachine& operator=(PioMachine&& other)
@@ -117,7 +189,7 @@ public:
       {
         break;
       }
-      if (timeoutMs > 0 && (now - start) > timeoutMs)
+      if (timeoutMs >= 0 && (now - start) > timeoutMs)
       {
         return false;
       }
@@ -141,7 +213,7 @@ public:
       {
         break;
       }
-      if (timeoutMs > 0 && (now - start) > timeoutMs)
+      if (timeoutMs >= 0 && (now - start) > timeoutMs)
       {
         return false;
       }
@@ -159,6 +231,11 @@ public:
     pio_sm_set_enabled(pio_, sm_, true);
   }
 
+  bool loaded() const
+  {
+    return loaded_;
+  }
+
 protected:
   uint sm_;
   pio_sm_config config_;
@@ -166,3 +243,5 @@ protected:
   std::shared_ptr<PioProgram> prog_;
   PIO pio_;
 };
+
+std::vector<std::weak_ptr<PioMachine::PioProgram>> PioMachine::cachedPrograms;
