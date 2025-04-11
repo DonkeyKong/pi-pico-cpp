@@ -2,6 +2,21 @@
 
 #include <algorithm>
 
+#include <algorithm>
+
+struct Vect2f
+{
+  float x = 0;
+  float y = 0;
+};
+
+struct Vect3f
+{
+  float x = 0;
+  float y = 0;
+  float z = 0;
+};
+
 template <typename T>
 inline bool between(T val, T bound1, T bound2)
 {

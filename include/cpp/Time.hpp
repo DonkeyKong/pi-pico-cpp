@@ -1,5 +1,6 @@
 #pragma once
 
+#include <pico/time.h>
 #include <hardware/timer.h>
 
 enum class TimingStrategy

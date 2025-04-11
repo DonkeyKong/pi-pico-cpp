@@ -2,7 +2,7 @@
 
 #include "Logging.hpp"
 #include "Color.hpp"
-#include "PioProgram.hpp"
+#include "Pio.hpp"
 #include "ws2812b.pio.h"
 
 #include <pico/stdlib.h>
@@ -30,25 +30,25 @@ public:
   LedStripWs2812b(uint pin) : PioMachine(&ws2812b_program)
   {
     uint offset = prog_->offset();
-    pio_sm_config c = ws2812b_program_get_default_config(offset);
+    config_ = ws2812b_program_get_default_config(offset);
 
     // Map the state machine's i/o pin groups to one pin, namely the `pin`
-    sm_config_set_in_pins(&c, pin);
-    sm_config_set_out_pins(&c, pin, 1);
-    sm_config_set_set_pins(&c, pin, 1);
-    sm_config_set_jmp_pin(&c, pin);
+    sm_config_set_in_pins(&config_, pin);
+    sm_config_set_out_pins(&config_, pin, 1);
+    sm_config_set_set_pins(&config_, pin, 1);
+    sm_config_set_jmp_pin(&config_, pin);
 
-    sm_config_set_in_shift(&c, false, false, 32);
-    sm_config_set_out_shift(&c, false, false, 32);
+    sm_config_set_in_shift(&config_, false, false, 32);
+    sm_config_set_out_shift(&config_, false, false, 32);
     
     // Set this pin's GPIO function (connect PIO to the pad)
     pio_gpio_init(pio_, pin);
     // Set the pin direction to input at the PIO
     pio_sm_set_consecutive_pindirs(pio_, sm_, pin, 1, true);
-    sm_config_set_clkdiv(&c, 5.0f);
+    sm_config_set_clkdiv(&config_, 5.0f);
 
     // Load our configuration, and jump to the start of the program
-    pio_sm_init(pio_, sm_, offset, &c);
+    pio_sm_init(pio_, sm_, offset, &config_);
     // Set the state machine running
     pio_sm_set_enabled(pio_, sm_, true);
   }

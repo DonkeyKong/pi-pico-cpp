@@ -1,7 +1,7 @@
 #pragma once
 
 #include "pulse_counter.pio.h"
-#include "PioProgram.hpp"
+#include "Pio.hpp"
 #include "Logging.hpp"
 
 #include <limits>
@@ -25,14 +25,14 @@ public:
     if (loaded_)
     {
       uint offset = prog_->offset();
-      pio_sm_config c = pulse_counter_program_get_default_config(offset);
+      config_ = pulse_counter_program_get_default_config(offset);
 
       // Map the state machine input and jump pins to 
-      sm_config_set_in_pins(&c, pin);
-      sm_config_set_jmp_pin(&c, pin);
+      sm_config_set_in_pins(&config_, pin);
+      sm_config_set_jmp_pin(&config_, pin);
 
-      sm_config_set_in_shift(&c, false, true, 32); // AUTOPUSH on
-      sm_config_set_out_shift(&c, false, false, 32); // AUTOPULL off
+      sm_config_set_in_shift(&config_, false, true, 32); // AUTOPUSH on
+      sm_config_set_out_shift(&config_, false, false, 32); // AUTOPULL off
       
       // Set this pin's GPIO function (connect PIO to the pad)
       pio_gpio_init(pio_, pin);
@@ -44,10 +44,10 @@ public:
 
       // Set the pin direction to input at the PIO
       pio_sm_set_consecutive_pindirs(pio_, sm_, pin, 1, false);
-      sm_config_set_clkdiv(&c, 1.0);
+      sm_config_set_clkdiv(&config_, 1.0);
     
       // Load our configuration, and jump to the start of the program
-      pio_sm_init(pio_, sm_, offset, &c);
+      pio_sm_init(pio_, sm_, offset, &config_);
       
       // Set the state machine running
       pio_sm_set_enabled(pio_, sm_, true);

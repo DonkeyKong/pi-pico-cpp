@@ -1,100 +1,87 @@
 .program joybus_host
 
-; Joybus reference:
-; https://n64brew.dev/wiki/Joybus_Protocol
+; Joybus is a 1 wire, single device protocol where a host and device take turns
+; sending data over a single line. Hosts send an 8 bit + 1 stop command to a devices,
+; switch the data line to an input, then listen for a (typically) 24-32 bit + 1 stop
+; response from the device.
+;
+; Electrically, the data line is pulled high to 3.3v thru a ~1k ohm resistor in the device.
+; The device and host take turns grounding and releasing the line to produce
+; pulses 1, 2, or 3 microseconds long.
+;
+; This program assumes a PIO clock of 8 MHz (clock divide = 15.625 on RP2040 )
+; This lets us fit 8 instructions inside a 1us pulse, while still being able
+; to represent a 3us pulse with a 24 cycle delay (representable in 5 bits, the
+; most the PIO hardware can delay on one instruction)
+;
+; Below are the waveforms for sending/receiving bits and stops.
+; Numbers are microseconds (us)
+;
+;              ──┆┐  3  ┌─┆────────
+;    Bit Zero:   ┆└─────┘1┆ release
+;
+;              ──┆┐1┌─────┆────────
+;     Bit One:   ┆└─┘  3  ┆ release
+;
+;              ──┆┐1┌───┆──────────
+;   Host Stop:   ┆└─┘ 2 ┆   release
+;
+;              ──┆┐ 2 ┌───┆────────
+; Device Stop:   ┆└───┘ 2 ┆ release
+;
+; The host sends one style of stop while devices send a different style.
+; This is fortunate because the device style can be distinguished easily
+; from a bit 0, and device replies have variable length.
+;
+; Joybus reference: https://n64brew.dev/wiki/Joybus_Protocol
+;
+; USAGE NOTES: 
+; autopull = FALSE, autopush = FALSE
+; pull_threshold = 32, push_threshold = 32
+; Commands are bitwise inverted before send because PINDIRS
+; logic is inverted from the data being sent.
 
-; Repeatedly get one word of data from the TX FIFO, stalling when the FIFO is
-; empty. Write the least significant bit to the OUT pin group.
-
-; 1 NOP is 0.125uS
-
+.wrap_target
 entry:
-    SET PINS, 0 ; Set all pins low
-
-prepare_to_send:
-    ; Pull the command from the c program
-    PULL [18]
-    ; Prepare to write 8 bits
-    SET Y, 7
-
+    SET Y 31            ; Used for comparison later, never changes
+    SET X 7             ; Setup a counter for sent bits
+    PULL                ; Wait until a command comes in
+    
 send_loop:
-    ; Move 1 bit to send to X and jump to the high or low pattern segment
-    OUT X, 1
-    JMP !X send_0
-
-send_1:
-    SET PINDIRS, 1 [7] ; send low for 8
-    SET PINDIRS, 0 [20] ; send high for 24 (21 here + 3 more before next edge)
-    JMP Y-- send_loop
-    JMP send_stop [1]
-
-send_0:
-    SET PINDIRS, 1 [23] ; setting pindirs to output will cause it to be pulled low
-    SET PINDIRS, 0 [4]  ; setting to input will make it get pulled high
-    JMP Y-- send_loop
-    JMP send_stop [1]
+    SET PINDIRS, 1 [7]  ; Every waveform starts low for 1us
+    OUT PINDIRS, 1 [15] ; Let a bit from the OSR take over for 2us
+    SET PINDIRS, 0 [6]  ; Return high for 1us
+    JMP X-- send_loop   ; Breaks out after sending the 8th bit
 
 send_stop:
-    SET PINDIRS, 1 [7]
-    SET PINDIRS, 0  ; no need to dwell, we can just get ready to recieve right away
+    SET PINDIRS, 1 [7]  ; Low for 1us
+    SET PINDIRS, 0      ; High for 2us (we just set and forget though)
+    SET X 31            ; Setup a counter for recieved bits
 
-prepare_to_receive:
-    SET Y, 31
+rec_loop:
+    WAIT 0 PIN 0 [11]   ; Wait for falling edge, then delay 1.5 uS
+    JMP PIN rec_data    ; low = zero or stop, high = one
 
-receive_loop:
-    ; wait for bus high
-    WAIT 1 PIN 0
-
-    ; Wait for falling edge, then delay 1.5 uS
-    WAIT 0 PIN 0 [11]
-
-    ; Sample the signal and wait another 1.0 uS
-    MOV X PINS [6]
-    JMP !X maybe_stop  ; if low, this might be a stop bit
-    JMP rec_data       ; else it's data
-
-maybe_stop:
-    JMP PIN rec_stop ; If the pin state is changed to 1, this was a stop
+rec_zero_or_stop:
+    NOP [6]             ; wait 1us and sample again
+    JMP PIN rec_stop    ; low = zero, high = stop
 
 rec_data:
-    IN X, 1
-    JMP Y-- receive_loop ; decrement the bytes to read and loop if not zero
-    PUSH ; move data from input shift register to recieve fifo
-    JMP prepare_to_receive
+    IN PINS 1
+    JMP X-- wait_for_data_end
+    PUSH
+    SET X 31
+
+wait_for_data_end:
+    WAIT 1 PIN 0        ; Wait for a logical high here to be sure the send has ended
+    JMP rec_loop [3]    ; Wait 0.5us after high for stability
 
 rec_stop:
-    ; if Y != 31 then there's data in the ISR and we need to PUSH
-    SET X, 31
-    JMP X!=Y rec_stop_push
-    JMP prepare_to_send [24]
+    ; There is 0.5us left in the stop pattern on jump here
+    ; Push if X != 31
+    JMP X!=Y send_partial_word
+    JMP entry
 
-rec_stop_push:
+send_partial_word:
     PUSH
-    JMP prepare_to_send [24]
-
-% c-sdk {
-static inline pio_sm_config n64_host_program_init(PIO pio, uint sm, uint offset, uint pin, float clkdiv) {
-    pio_sm_config c = n64_host_program_get_default_config(offset);
-
-    // Map the state machine's i/o pin groups to one pin, namely the `pin`
-    sm_config_set_in_pins(&c, pin);
-    sm_config_set_out_pins(&c, pin, 1);
-    sm_config_set_set_pins(&c, pin, 1);
-    sm_config_set_jmp_pin(&c, pin);
-
-    sm_config_set_in_shift(&c, false, false, 32);
-    sm_config_set_out_shift(&c, false, false, 32);
-    
-    // Set this pin's GPIO function (connect PIO to the pad)
-    pio_gpio_init(pio, pin);
-    // Set the pin direction to input at the PIO
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, false);
-    sm_config_set_clkdiv(&c, clkdiv);
-
-    // Load our configuration, and jump to the start of the program
-    pio_sm_init(pio, sm, offset, &c);
-    // Set the state machine running
-    pio_sm_set_enabled(pio, sm, true);
-    return c;
-}
-%}
+.wrap

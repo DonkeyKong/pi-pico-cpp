@@ -320,8 +320,12 @@ Outputs A/A* and B/B* share the same PWM hardware, so attempting to setup e.g.: 
 ## NTPSync.hpp
 (TBI) Synchronize the pi pico system clock with an internet time server. Based on pi pico examples.
 
-## PioProgram.hpp
-(TBD) Document and generalize
+## Pio.hpp
+Classes to init and manage PIO (programmable I/O) state machines. Automatically finds a free state machine and copies programs to free PIO hardware.
+
+The class is smart, so let's say you instantiate 5 copies of a PIO program. On making copy 1, it'll create a program and send it to PIO_0. Copies 2, 3, and 4 will all instantiate on PIO_0 and share the program data. Copy 5 will find PIO_0 is full, make a new copy the program to PIO_1, and instantiate its state machine there.
+
+If you don't know what all this means, basically you can use the complex PIO peripheral classes in this library (N64 Controller, Fan) by simply specifying which pins they connect to and skip learning about how the PIO hardware is split up and provisioned.
 
 ## I2C Interface
 (TBD) Document and generalize
