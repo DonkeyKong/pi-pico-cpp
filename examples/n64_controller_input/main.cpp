@@ -6,38 +6,44 @@
 // Pico SDK headers
 #include <pico/stdlib.h>
 #include <pico/stdio.h>
-#include <pico/bootrom.h>
 
 // std headers
 #include <iostream>
 
-void printInfoDiff(const N64ControllerInfo before, const N64ControllerInfo after)
+#define printButtonStateIfChanged(a, b, button) \
+if (a.getButton(N64Buttons::button) != b.getButton(N64Buttons::button)) \
+  std::cout << #button << " : " << b.getButton(N64Buttons::button) << std::endl
+
+void printStatusFlags(const N64ControllerInfo a, const N64ControllerInfo b)
 {
-  if (before.getStatusFlag(N64Status::AddressCrcError) != after.getStatusFlag(N64Status::AddressCrcError)) std::cout << "AddressCrcError: " << after.getStatusFlag(N64Status::AddressCrcError) << std::endl;
-  if (!before.getStatusFlag(N64Status::PakInserted) && after.getStatusFlag(N64Status::PakInserted)) std::cout << "Pak Inserted" << std::endl;
-  if (!before.getStatusFlag(N64Status::PakRemoved) && after.getStatusFlag(N64Status::PakRemoved)) std::cout << "Pak Removed" << std::endl;
+  if (b.getStatusFlag(N64Status::AddressCrcError)) 
+    std::cout << "AddressCrcError" << std::endl;
+  if (!a.getStatusFlag(N64Status::PakInserted) && b.getStatusFlag(N64Status::PakInserted))
+    std::cout << "Pak Inserted" << std::endl;
+  if (!a.getStatusFlag(N64Status::PakRemoved) && b.getStatusFlag(N64Status::PakRemoved))
+    std::cout << "Pak Removed" << std::endl;
 };
 
-void printButtonDiff(const N64ControllerButtonState before, const N64ControllerButtonState after)
+void printButtonDiff(const N64ControllerButtonState a, const N64ControllerButtonState b)
 {
-  if (before.getButton(N64Buttons::PadRight) != after.getButton(N64Buttons::PadRight)) std::cout << "PadRight: " << after.getButton(N64Buttons::PadRight) << std::endl;
-  if (before.getButton(N64Buttons::PadLeft) != after.getButton(N64Buttons::PadLeft)) std::cout << "PadLeft: " << after.getButton(N64Buttons::PadLeft) << std::endl;
-  if (before.getButton(N64Buttons::PadDown) != after.getButton(N64Buttons::PadDown)) std::cout << "PadDown: " << after.getButton(N64Buttons::PadDown) << std::endl;
-  if (before.getButton(N64Buttons::PadUp) != after.getButton(N64Buttons::PadUp)) std::cout << "PadUp: " << after.getButton(N64Buttons::PadUp) << std::endl;
-  if (before.getButton(N64Buttons::Start) != after.getButton(N64Buttons::Start)) std::cout << "Start: " << after.getButton(N64Buttons::Start) << std::endl;
-  if (before.getButton(N64Buttons::Z) != after.getButton(N64Buttons::Z)) std::cout << "Z: " << after.getButton(N64Buttons::Z) << std::endl;
-  if (before.getButton(N64Buttons::B) != after.getButton(N64Buttons::B)) std::cout << "B: " << after.getButton(N64Buttons::B) << std::endl;
-  if (before.getButton(N64Buttons::A) != after.getButton(N64Buttons::A)) std::cout << "A: " << after.getButton(N64Buttons::A) << std::endl;
-  if (before.getButton(N64Buttons::CRight) != after.getButton(N64Buttons::CRight)) std::cout << "CRight: " << after.getButton(N64Buttons::CRight) << std::endl;
-  if (before.getButton(N64Buttons::CLeft) != after.getButton(N64Buttons::CLeft)) std::cout << "CLeft: " << after.getButton(N64Buttons::CLeft) << std::endl;
-  if (before.getButton(N64Buttons::CDown) != after.getButton(N64Buttons::CDown)) std::cout << "CDown: " << after.getButton(N64Buttons::CDown) << std::endl;
-  if (before.getButton(N64Buttons::CUp) != after.getButton(N64Buttons::CUp)) std::cout << "CUp: " << after.getButton(N64Buttons::CUp) << std::endl;
-  if (before.getButton(N64Buttons::R) != after.getButton(N64Buttons::R)) std::cout << "R: " << after.getButton(N64Buttons::R) << std::endl;
-  if (before.getButton(N64Buttons::L) != after.getButton(N64Buttons::L)) std::cout << "L: " << after.getButton(N64Buttons::L) << std::endl;
-  if (before.getButton(N64Buttons::Reserved) != after.getButton(N64Buttons::Reserved)) std::cout << "Reserved: " << after.getButton(N64Buttons::Reserved) << std::endl;
-  if (before.getButton(N64Buttons::Reset) != after.getButton(N64Buttons::Reset)) std::cout << "Reset: " << after.getButton(N64Buttons::Reset) << std::endl;
-  if (before.xAxis != after.xAxis) std::cout << "StickX: " << (int)after.xAxis << std::endl;
-  if (before.yAxis != after.yAxis) std::cout << "StickY: " << (int)after.yAxis << std::endl;
+  printButtonStateIfChanged(a, b, PadRight);
+  printButtonStateIfChanged(a, b, PadLeft);
+  printButtonStateIfChanged(a, b, PadDown);
+  printButtonStateIfChanged(a, b, PadUp);
+  printButtonStateIfChanged(a, b, Start);
+  printButtonStateIfChanged(a, b, Z);
+  printButtonStateIfChanged(a, b, B);
+  printButtonStateIfChanged(a, b, A);
+  printButtonStateIfChanged(a, b, CRight);
+  printButtonStateIfChanged(a, b, CLeft);
+  printButtonStateIfChanged(a, b, CDown);
+  printButtonStateIfChanged(a, b, CUp);
+  printButtonStateIfChanged(a, b, R);
+  printButtonStateIfChanged(a, b, L);
+  printButtonStateIfChanged(a, b, Reserved);
+  printButtonStateIfChanged(a, b, Reset);
+  if (a.xAxis != b.xAxis) std::cout << "StickX: " << (int)b.xAxis << std::endl;
+  if (a.yAxis != b.yAxis) std::cout << "StickY: " << (int)b.yAxis << std::endl;
 };
 
 int main()
@@ -51,34 +57,28 @@ int main()
   sleep_ms(2000);
   #endif
 
-  N64ControllerIn controller(28);
+  N64ControllerIn controller(28, /*autoInitRumblePak*/ true);
+
+  // Used to track past controller state
   N64ControllerButtonState lastButtonState;
   N64ControllerInfo lastInfo;
 
-  BootSelButton bootButton;
-
-  controller.update();
-  std::cout << controller.info << std::endl;
-  sleep_ms(50);
-
-  controller.initRumble();
-
   intervalLoop([&]()
   {
-    // Reboot into programming mode if the bootsel button is clicked
-    bootButton.update();
-    if (bootButton.buttonDown())
+    // Update the controller's info and button state
+    controller.update();
+
+    // If a rumble pak is ready, rumble if A is held
+    if (controller.rumblePakReady)
     {
-      reset_usb_boot(0,0);
+      controller.rumble(controller.state.getButton(N64Buttons::A));
     }
 
-    controller.update();
-    printInfoDiff(lastInfo, controller.info);
-    lastInfo = controller.info;
+    // Print out any flag or button state changes
+    printStatusFlags(lastInfo, controller.info);
     printButtonDiff(lastButtonState, controller.state);
+    lastInfo = controller.info;
     lastButtonState = controller.state;
-
-    controller.rumble(controller.state.getButton(N64Buttons::A));
 
   }, 16667);  // Update at 60 Hz
   return 0;

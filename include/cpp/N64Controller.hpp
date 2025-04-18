@@ -183,24 +183,43 @@ struct N64ControllerButtonState : public PioBuffer
 // Only button and stick state is supported at the moment
 class N64ControllerIn : JoybusHost
 {
-  bool padOk_ = false;
 public:
-  N64ControllerIn(uint pin) : JoybusHost(pin), padOk_{false} { }
 
   N64ControllerInfo info;
   N64ControllerButtonState state;
+  bool connected;
+  bool autoInitRumblePak;
+  bool rumblePakReady;
 
-  // Update the state of the N64 pad
+  N64ControllerIn(uint pin, bool autoInitRumblePak = false) 
+    : JoybusHost(pin)
+    , connected{false}
+    , autoInitRumblePak{autoInitRumblePak}
+    , rumblePakReady{false}
+  { }
+
+  // Update the state of the sticks, buttons, and accessories 
   void update()
   {
-    if (!padOk_)
+    // Reset if not connected
+    if (!connected)
     {
-      padOk_ = command(JoybusCommand::Reset, info);
+      if (!command(JoybusCommand::Reset, info)) { onDisconnect(); return; }
+      connected = true;
     }
-    else
+
+    // Update info and button state
+    if (!command(JoybusCommand::Info, info)) { onDisconnect(); return; }
+    if (!command(JoybusCommand::ControllerState, state)) { onDisconnect(); return; }
+    
+    // Handle accessory init
+    if (autoInitRumblePak && !rumblePakReady && info.getStatusFlag(N64Status::PakInserted))
     {
-      padOk_ = command(JoybusCommand::Info, info);
-      padOk_ = command(JoybusCommand::ControllerState, state);
+      initRumble(); // Sets rumblePakReady true on success
+    }
+    else if (info.getStatusFlag(N64Status::PakRemoved))
+    {
+      rumblePakReady = false;
     }
   }
 
@@ -301,30 +320,43 @@ public:
     return true;
   }
 
-  void rumble(bool enabled)
+  bool rumble(bool enabled)
   {
     uint8_t data[32] {0xFF};
     JoybusBuffer buf(&data[0], 32);
     memset(&data[0], enabled ? 0x01 : 0x00, 32);
-    writeAccessory(0xC000, buf, false);
+    return writeAccessory(0xC000, buf, false);
   }
 
-  void initRumble()
+  bool initRumble()
   {
+    rumblePakReady = false;
+
     // This init rumble procedure is 100% cargo cult, 
     // from https://github.com/DavidPagels/retro-pico-switch/blob/master/src/otherController/n64/N64Controller.cpp
     uint8_t data[32];
     JoybusBuffer buf(&data[0], 32);
 
     memset(&data[0], 0xEE, 32);
-    writeAccessory(0x8000, buf, false);
-    readAccessory(0x8000, buf, false);
+    if (!writeAccessory(0x8000, buf, false)) return false;
+    if (!readAccessory(0x8000, buf, false)) return false;
 
     memset(&data[0], 0x80, 32);
-    writeAccessory(0x8000, buf, false);
-    readAccessory(0x8000, buf, false);
+    if (!writeAccessory(0x8000, buf, false)) return false;
+    if (!readAccessory(0x8000, buf, false)) return false;
 
-    rumble(false);
+    if (!rumble(false)) return false;
+
+    rumblePakReady = true;
+    return true;
+  }
+private:
+  void onDisconnect()
+  {
+    connected = false;
+    rumblePakReady = false;
+    info = {};
+    state = {};
   }
 };
 
