@@ -69,6 +69,9 @@ public:
     // Send a reset when done
     data = 0xFF << 24;
     pio_sm_put_blocking(pio_, sm_, data);
+
+    // There is a minimum time to wait here before sending again...
+    // TBI
   }
 
   static inline void writeColorsParallel(const LEDBuffer& buffer, std::vector<BufferMapping>& mappings, float brightness = 1.0f)

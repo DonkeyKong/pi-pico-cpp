@@ -1,100 +1,112 @@
 #pragma once
 
-#include "Logging.hpp"
-#include "Math.hpp"
-#include "Pio.hpp"
+#include "Joybus.hpp"
 
-#include "joybus_host.pio.h"
-#include "joybus_client.pio.h"
+#include <cstring>
 
-#include <iostream>
-#include <iomanip>
-
-enum class RequestCommand : uint8_t
+namespace N64Status
 {
-  Info = 0x00,
-  ControllerState = 0x01,
-  ReadAccessory = 0x02,
-  WriteAccessory = 0x03,
-  ReadEEPROM = 0x04,
-  WriteEEPROM = 0x05,
-  ReadKeypress = 0x13, // For N64DD Randnet keyboard
-  Reset = 0xFF,
-};
+  enum Flag : uint8_t
+  {
+    None = 0x00,
+    PakInserted = 0x01 << 0,    // A controller pak is inserted
+    PakRemoved = 0x01 << 1,     // A controller pak was removed since last status
+    AddressCrcError = 0x01 << 2 // The last read or write command contained an address with a bad CRC
+  };
+}
 
-enum class StatusFlag : uint8_t
+namespace N64Buttons
 {
-  None = 0x00,
-  PakInserted = 0x01 << 7,    // A controller pak is inserted
-  PakRemoved = 0x01 << 6,     // A controller pak was removed since last status
-  AddressCrcError = 0x01 << 5 // The last read or write command contained an address with a bad CRC
-};
+  enum Flag : uint16_t
+  {
+    None = 0x00,
+  
+    A = (0x01 << 15),
+    B = (0x01 << 14),
+    Z = (0x01 << 13),
+    Start = (0x01 << 12),
+    PadUp = (0x01 << 11),
+    PadDown = (0x01 << 10),
+    PadLeft = (0x01 << 9),
+    PadRight = (0x01 << 8),
+  
+    Reset = (0x01 << 7),
+    Reserved = (0x01 << 6),
+    L = (0x01 << 5),
+    R = (0x01 << 4),
+    CUp = (0x01 << 3),
+    CDown = (0x01 << 2),
+    CLeft = (0x01 << 1),
+    CRight = (0x01 << 0),
+  };
+}
 
-enum class ButtonFlag : uint16_t
+
+struct N64ControllerInfo : public PioBuffer
 {
-  None = 0x00,
-
-  A = (0x01 << 7),
-  B = (0x01 << 6),
-  Z = (0x01 << 5),
-  Start = (0x01 << 4),
-  PadUp = (0x01 << 3),
-  PadDown = (0x01 << 2),
-  PadLeft = (0x01 << 1),
-  PadRight = (0x01 << 0),
-
-  Reset = (0x01 << 15),
-  Reserved = (0x01 << 14),
-  L = (0x01 << 13),
-  R = (0x01 << 12),
-  CUp = (0x01 << 11),
-  CDown = (0x01 << 10),
-  CLeft = (0x01 << 9),
-  CRight = (0x01 << 8),
-};
-
-struct __attribute__((packed)) N64ControllerState
-{
-  // In-memory rep on little endian is like
-  //    reserved            status              header2              header1
-  // 7 6 5 4 3 2 1 0    7 6 5 4 3 2 1 0    7 6 5 4 3 2 1 0       7 6 5 4 3 2 1 0
-  //    yAxis               xAxis                       buttons
-  // 7 6 5 4 3 2 1 0    7 6 5 4 3 2 1 0    15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0
-
   uint8_t header1 = 0x05;
   uint8_t header2 = 0x00;
-  StatusFlag status = StatusFlag::None;
-  
-  ButtonFlag buttons = ButtonFlag::None;
-  int8_t xAxis = 0;
-  int8_t yAxis = 0;
-  
-  PioByteBuffer infoBuffer()
+  N64Status::Flag status = N64Status::None;
+
+  N64ControllerInfo() : PioBuffer(3) {}
+
+  bool getStatusFlag(N64Status::Flag flag) const
   {
-    return {(uint8_t*)&header1, 3, PioBufferPacking::MsbToLsb};
-  }
-  
-  PioByteBuffer pollBuffer()
-  {
-    return {(uint8_t*)&buttons, 4, PioBufferPacking::MsbToLsb};
+    return (status & flag) != N64Status::None;
   }
 
-  bool getStatusFlag(StatusFlag flag) const
-  {
-    return (StatusFlag)((uint8_t)status & (uint8_t)flag) != StatusFlag::None;
-  }
-
-  void setStatusFlag(StatusFlag flag, bool value)
+  void setStatusFlag(N64Status::Flag flag, bool value)
   {
     if (value)
     {
-      status = (StatusFlag)((uint8_t)status | (uint8_t)flag);
+      status = (N64Status::Flag)(status | flag);
     }
     else
     {
-      status = (StatusFlag)((uint8_t)status & ~((uint8_t)flag));
+      status = (N64Status::Flag)(status & ~flag);
     }
   }
+
+  virtual void pack(uint32_t& dst, size_t i) const override
+  {
+    switch (i)
+    {
+      case 0:
+        dst = (uint32_t)header1 << 24;
+        break;
+      case 1:
+        dst = (uint32_t)header2 << 24;
+        break;
+      case 2:
+        dst = (uint32_t)status << 24;
+        break;
+    }
+  }
+
+  virtual void unpack(const uint32_t& src, size_t i) override
+  {
+    switch (i)
+    {
+      case 0:
+        header1 = (uint8_t)src;
+        break;
+      case 1:
+        header2 = (uint8_t)src;
+        break;
+      case 2:
+        status = (N64Status::Flag)src;
+        break;
+    }
+  }
+};
+
+struct N64ControllerButtonState : public PioBuffer
+{
+  N64Buttons::Flag buttons = N64Buttons::None;
+  int8_t xAxis = 0;
+  int8_t yAxis = 0;
+
+  N64ControllerButtonState() : PioBuffer(4) {}
 
   Vect2f getStick()
   {
@@ -107,223 +119,284 @@ struct __attribute__((packed)) N64ControllerState
     yAxis = (int8_t)pos.y;
   }
 
-  bool getButton(ButtonFlag button) const
+  bool getButton(N64Buttons::Flag button) const
   {
-    return (ButtonFlag)((uint16_t)button & (uint16_t)buttons) != ButtonFlag::None;
+    return (button & buttons) != N64Buttons::None;
   }
 
-  void setButton(ButtonFlag button, bool value)
+  void setButton(N64Buttons::Flag button, bool value)
   {
     if (value)
     {
-      buttons = (ButtonFlag)((uint16_t)buttons | (uint16_t)button);
+      buttons = (N64Buttons::Flag)(buttons | button);
     }
     else
     {
-      buttons = (ButtonFlag)((uint16_t)buttons & ~((uint16_t)button));
+      buttons = (N64Buttons::Flag)(buttons & ~button);
+    }
+  }
+
+  // Implementation for PioMachine to use this as as a PioBuffer
+
+
+  virtual void pack(uint32_t& dst, size_t i) const override
+  {
+    switch (i)
+    {
+      case 0:
+        dst = (uint32_t)buttons << 16;
+        break;
+      case 1:
+        dst = (uint32_t)buttons << 24;
+        break;
+      case 2:
+        dst = (uint32_t)xAxis << 24;
+        break;
+      case 3:
+        dst = (uint32_t)yAxis << 24;
+        break;
+    }
+  }
+
+  virtual void unpack(const uint32_t& src, size_t i) override
+  {
+    switch (i)
+    {
+      case 0:
+        buttons = (N64Buttons::Flag)((buttons & 0x00FF) | ((src << 8) & 0xFF00));
+        break;
+      case 1:
+        buttons = (N64Buttons::Flag)((buttons & 0xFF00) | (src & 0x00FF));
+        break;
+      case 2:
+        xAxis = (int8_t)src;
+        break;
+      case 3:
+        yAxis = (int8_t)src;
+        break;
     }
   }
 };
 
-std::ostream &operator<<(std::ostream &os, const N64ControllerState &c)
-{
-  os << "{" << std::endl
-     << "  \"Status\" : " << (int)c.status << std::endl
-     << "  \"Controller ID\" : 0x" << std::hex << std::setfill('0') << std::setw(2) << (int)c.header1 << std::setw(2) << (int)c.header2 << std::dec << std::endl
-     << "  \"Pak Inserted\" : " << c.getStatusFlag(StatusFlag::PakInserted) << std::endl
-     << "  \"Pak Removed\" : " << c.getStatusFlag(StatusFlag::PakRemoved) << std::endl
-     << "  \"CRC Error\" : " << c.getStatusFlag(StatusFlag::AddressCrcError) << std::endl
-     << "  \"PadRight\" : " << c.getButton(ButtonFlag::PadRight) << std::endl
-     << "  \"PadLeft\" : " << c.getButton(ButtonFlag::PadLeft) << std::endl
-     << "  \"PadDown\" : " << c.getButton(ButtonFlag::PadDown) << std::endl
-     << "  \"PadUp\" : " << c.getButton(ButtonFlag::PadUp) << std::endl
-     << "  \"Start\" : " << c.getButton(ButtonFlag::Start) << std::endl
-     << "  \"Z\" : " << c.getButton(ButtonFlag::Z) << std::endl
-     << "  \"B\" : " << c.getButton(ButtonFlag::B) << std::endl
-     << "  \"A\" : " << c.getButton(ButtonFlag::A) << std::endl
-     << "  \"CRight\" : " << c.getButton(ButtonFlag::CRight) << std::endl
-     << "  \"CLeft\" : " << c.getButton(ButtonFlag::CLeft) << std::endl
-     << "  \"CDown\" : " << c.getButton(ButtonFlag::CDown) << std::endl
-     << "  \"CUp\" : " << c.getButton(ButtonFlag::CUp) << std::endl
-     << "  \"R\" : " << c.getButton(ButtonFlag::R) << std::endl
-     << "  \"L\" : " << c.getButton(ButtonFlag::L) << std::endl
-     << "  \"Reserved\" : " << c.getButton(ButtonFlag::Reserved) << std::endl
-     << "  \"Reset\" : " << c.getButton(ButtonFlag::Reset) << std::endl
-     << "  \"StickX\" : " << (int)c.xAxis << std::endl
-     << "  \"StickY\" : " << (int)c.yAxis << std::endl
-     << "}";
-  return os;
-}
-
 // Connect an N64 controller to a Pi Pico and read button
 // presses, stick movements, and more.
-// Copying to/from the controller pak isn't really supported
-class N64ControllerIn : PioMachine
+// Only button and stick state is supported at the moment
+class N64ControllerIn : JoybusHost
 {
-  static constexpr uint host_readTimeoutMs = 5;
-  static constexpr uint host_writeTimeoutMs = 5;
-
   bool padOk_ = false;
-  N64ControllerState state_;
 public:
-  N64ControllerIn(uint pin) : PioMachine(&joybus_host_program), padOk_{false}
-  {
-    config_ = joybus_host_program_get_default_config(prog_->offset());
+  N64ControllerIn(uint pin) : JoybusHost(pin), padOk_{false} { }
 
-    // Configure IOs for bidirectional Joybus comms
-    gpio_set_pulls(pin, false, false);
-
-    // Map the state machine's i/o pin groups to one pin, namely the `pin`
-    sm_config_set_in_pins(&config_, pin);
-    sm_config_set_out_pins(&config_, pin, 1);
-    sm_config_set_set_pins(&config_, pin, 1);
-    sm_config_set_jmp_pin(&config_, pin);
-    
-
-    sm_config_set_in_shift(&config_, false, false, 32);
-    sm_config_set_out_shift(&config_, false, false, 32);
-    
-    // Set this pin's GPIO function (connect PIO to the pad)
-    pio_gpio_init(pio_, pin);
-
-    // Set the pin direction to input at the PIO
-    pio_sm_set_consecutive_pindirs(pio_, sm_, pin, 1, false);
-    sm_config_set_clkdiv(&config_, 15.625f);
-
-    // Load our configuration, and jump to the start of the program
-    pio_sm_init(pio_, sm_, prog_->offset(), &config_);
-
-    // Set the state machine running
-    pio_sm_set_enabled(pio_, sm_, true);
-  }
-
-  const N64ControllerState& state()
-  {
-    return state_;
-  }
-
-  inline bool hostCommand(RequestCommand cmd, PioByteBuffer responseBuffer)
-  {
-    // Invert commands because joybus sends with PINDIRS, where 1 = low
-    uint8_t sendData = ~(uint8_t)cmd;
-    size_t sendSize = 1;
-    int bytesWritten = write({&sendData, sendSize, PioBufferPacking::MsbToLsb}, host_writeTimeoutMs);
-    if (bytesWritten != 1)
-    {
-      DEBUG_LOG("Wrote " << bytesWritten << " but expected " << sendSize << " bytes, resetting...");
-      reset();
-      return false;
-    }
-
-    // Read the response, however long that is
-    int bytesRead = read(responseBuffer, host_readTimeoutMs);
-    if (bytesRead != responseBuffer.size)
-    {
-      DEBUG_LOG("Read " << bytesRead << " but expected " << responseBuffer.size << " bytes, resetting...");
-      reset();
-      return false;
-    }
-
-    return true;
-  }
+  N64ControllerInfo info;
+  N64ControllerButtonState state;
 
   // Update the state of the N64 pad
   void update()
   {
     if (!padOk_)
     {
-      padOk_ = hostCommand(RequestCommand::Reset, state_.infoBuffer());
+      padOk_ = command(JoybusCommand::Reset, info);
     }
     else
     {
-      padOk_ = hostCommand(RequestCommand::ControllerState, state_.pollBuffer());
+      padOk_ = command(JoybusCommand::Info, info);
+      padOk_ = command(JoybusCommand::ControllerState, state);
+    }
+  }
+
+  // replace the lower 5 bits of the address with a checksum of the upper 11
+  static uint16_t addressChecksum(uint16_t address)
+  {
+    constexpr uint8_t checksumTable[] = { 0x01, 0x1A, 0x0D, 0x1C, 0x0E, 0x07, 0x19, 0x16, 0x0B, 0x1F, 0x15 };
+    uint8_t checksum = 0;
+    for (int i=0; i < 11; ++i)
+    {
+      uint16_t bitmask = 1 << (15-i);
+      if ((address & bitmask) != 0)
+      {
+        checksum ^= checksumTable[i];
+      }
+    }
+
+    // Shove the checksum into the lower 5 bits
+    return (address & 0xFFE0) | (checksum & 0x001F);
+  }
+
+  static uint8_t crc(uint8_t* data, size_t size) 
+  {
+    constexpr uint8_t polynomial = 0x85;
+    uint8_t crc = 0x00;  // Initial value
+
+    for (size_t i = 0; i < size; ++i) 
+    {
+        crc ^= data[i];
+        for (uint8_t bit = 0; bit < 8; ++bit) 
+        {
+            if (crc & 0x80) 
+            {
+                crc = (crc << 1) ^ polynomial;
+            } 
+            else 
+            {
+                crc <<= 1;
+            }
+        }
+    }
+    return crc;
+  }
+
+  bool readAccessory(uint16_t address, JoybusBuffer& readBuffer, bool checkCrc = true)
+  {
+    if (readBuffer.size != 32)
+    {
+      DEBUG_LOG("Buffer is wrong size!");
+      return false;
+    }
+
+    uint8_t deviceCrc = 0;
+    if (!command(JoybusCommand::ReadAccessory, addressChecksum(address), readBuffer, deviceCrc))
+    {
+      DEBUG_LOG("ReadAccessory comm failure!");
+      return false;
+    }
+
+    if (checkCrc)
+    {
+      uint8_t hostCrc = crc(readBuffer.data, readBuffer.size);
+      if (hostCrc != deviceCrc)
+      {
+        DEBUG_LOG("ReadAccessory crc mismatch!");
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool writeAccessory(uint16_t address, const JoybusBuffer& writeBuffer, bool checkCrc = true)
+  {
+    if (writeBuffer.size != 32)
+    {
+      DEBUG_LOG("Buffer is wrong size!");
+      return false;
+    }
+
+    uint8_t deviceCrc = 0;
+    if (!command(JoybusCommand::WriteAccessory, addressChecksum(address), writeBuffer, deviceCrc))
+    {
+      DEBUG_LOG("WriteAccessory comm failure!");
+      return false;
+    }
+
+    if (checkCrc)
+    {
+      uint8_t hostCrc = crc(writeBuffer.data, writeBuffer.size);
+      if (hostCrc != deviceCrc)
+      {
+        DEBUG_LOG("WriteAccessory crc mismatch!");
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  void rumble(bool enabled)
+  {
+    uint8_t data[32] {0xFF};
+    JoybusBuffer buf(&data[0], 32);
+    memset(&data[0], enabled ? 0x01 : 0x00, 32);
+    writeAccessory(0xC000, buf, false);
+  }
+
+  void initRumble()
+  {
+    // This init rumble procedure is 100% cargo cult, 
+    // from https://github.com/DavidPagels/retro-pico-switch/blob/master/src/otherController/n64/N64Controller.cpp
+    uint8_t data[32];
+    JoybusBuffer buf(&data[0], 32);
+
+    memset(&data[0], 0xEE, 32);
+    writeAccessory(0x8000, buf, false);
+    readAccessory(0x8000, buf, false);
+
+    memset(&data[0], 0x80, 32);
+    writeAccessory(0x8000, buf, false);
+    readAccessory(0x8000, buf, false);
+
+    rumble(false);
+  }
+};
+
+class N64ControllerOut : JoybusClient
+{
+  JoybusCommand cmd_;
+  N64ControllerInfo info_;
+  N64ControllerButtonState state_;
+
+public:
+  N64ControllerOut(uint pin) 
+    : JoybusClient(pin)
+  {}
+
+protected:
+  virtual PioBuffer* onRecieveCommand(JoybusCommand cmd)
+  {
+    cmd_ = cmd;
+
+    // We only handle reset, status, and button state commands, none of which have data attached
+    return nullptr;
+  }
+
+  // Command data recieived. Finalize the result and hand over a buffer
+  virtual PioBuffer* onSendResult()
+  {
+    switch (cmd_)
+    {
+      case JoybusCommand::Reset:
+      case JoybusCommand::Info:
+        return &info_;
+      case JoybusCommand::ControllerState:
+        return &state_;
+      default:
+        return nullptr;
     }
   }
 };
 
-// Connect an pi pico to an N64 and have it emulate a controller
-// Button presses and stick movements are supported.
-// Pretending to have a controller pak isn't really supported
-//
-// Because the N64 queries for info whenever it feels like
-// and will disconnect the controller if its does not respond
-// promptly, we make use of an interrupt to send data
-//
-// IRQ 4 is hard coded at the moment
-// class N64ControllerOut : PioMachine
-// {
-//   static constexpr uint client_readTimeoutMs = 1000;
-//   static constexpr uint client_writeTimeoutMs = 0;
-//   static constexpr uint client_errorWaitMs = 0;
+std::ostream& operator<<(std::ostream &os, const N64ControllerButtonState &c)
+{
+  os << "{" << std::endl
+    << "  \"PadRight\" : " << c.getButton(N64Buttons::PadRight) << std::endl
+    << "  \"PadLeft\" : " << c.getButton(N64Buttons::PadLeft) << std::endl
+    << "  \"PadDown\" : " << c.getButton(N64Buttons::PadDown) << std::endl
+    << "  \"PadUp\" : " << c.getButton(N64Buttons::PadUp) << std::endl
+    << "  \"Start\" : " << c.getButton(N64Buttons::Start) << std::endl
+    << "  \"Z\" : " << c.getButton(N64Buttons::Z) << std::endl
+    << "  \"B\" : " << c.getButton(N64Buttons::B) << std::endl
+    << "  \"A\" : " << c.getButton(N64Buttons::A) << std::endl
+    << "  \"CRight\" : " << c.getButton(N64Buttons::CRight) << std::endl
+    << "  \"CLeft\" : " << c.getButton(N64Buttons::CLeft) << std::endl
+    << "  \"CDown\" : " << c.getButton(N64Buttons::CDown) << std::endl
+    << "  \"CUp\" : " << c.getButton(N64Buttons::CUp) << std::endl
+    << "  \"R\" : " << c.getButton(N64Buttons::R) << std::endl
+    << "  \"L\" : " << c.getButton(N64Buttons::L) << std::endl
+    << "  \"Reserved\" : " << c.getButton(N64Buttons::Reserved) << std::endl
+    << "  \"Reset\" : " << c.getButton(N64Buttons::Reset) << std::endl
+    << "  \"StickX\" : " << (int)c.xAxis << std::endl
+    << "  \"StickY\" : " << (int)c.yAxis << std::endl
+    << "}";
+  return os;
+}
 
-//   N64ControllerState state_;
-  
-//   N64ControllerOut(uint pin) : PioMachine(&joybus_client_program)
-//   {
-//     config_ = joybus_client_program_get_default_config(prog_->offset());
-    
-//     // Configure IOs for bidirectional Joybus comms
-//     gpio_set_pulls(pin, true, false);
-
-//     // Map the state machine's i/o pin groups to one pin, namely the `pin`
-//     // parameter to this function.
-//     sm_config_set_in_pins(&config_, pin);
-//     sm_config_set_out_pins(&config_, pin, 1);
-//     sm_config_set_set_pins(&config_, pin, 1);
-
-//     sm_config_set_in_shift(&config_, false, false, 32);
-//     sm_config_set_out_shift(&config_, false, false, 32);
-    
-//     // Set this pin's GPIO function (connect PIO to the pad)
-//     pio_gpio_init(pio_, pin);
-//     // Set the pin direction to input at the PIO
-//     pio_sm_set_consecutive_pindirs(pio_, sm_, pin, 1, false);
-//     sm_config_set_clkdiv(&config_, 15.625f);
-
-//     // Load our configuration, and jump to the start of the program
-//     pio_sm_init(pio_, sm_, prog_->offset(), &config_);
-//     // Set the state machine running
-//     pio_sm_set_enabled(pio_, sm_, true);
-//   }
-
-//   inline bool writeLengthAndBytes(uint32_t data, uint32_t bytesToSend, int timeoutMs = -1)
-//   {
-//     if (!write((uint32_t)(bytesToSend*8-1), timeoutMs)) return false;
-//     if (!write(data, timeoutMs)) return false;
-//     return true;
-//   }
-
-//   void handleCommand()
-//   {
-//     // Wait for the N64 to request something
-//     RequestCommand value;
-//     if (read((uint32_t&)value), client_readTimeoutMs)
-//     {
-//       DEBUG_LOG("N64 command read timed out, resetting pio...");
-//       reset();
-//       if constexpr(client_errorWaitMs > 0) busy_wait_ms(client_errorWaitMs);
-//       return;
-//     }
-
-//     if (value == RequestCommand::Info || value == RequestCommand::Reset)
-//     {
-//       if (!writeLengthAndBytes(state_.infoMessage(), 3, client_writeTimeoutMs))
-//       {
-//         DEBUG_LOG("Timed out responding to info cmd...");
-//         reset();
-//         if constexpr(client_errorWaitMs > 0) busy_wait_ms(client_errorWaitMs);
-//         return;
-//       }
-//     }
-//     else if (value == RequestCommand::ControllerState)
-//     {
-//       if (!writeLengthAndBytes(state_.pollMessage(), 4, client_writeTimeoutMs))
-//       {
-//         DEBUG_LOG("Timed out responding to poll cmd...");
-//         reset();
-//         if constexpr(client_errorWaitMs > 0) busy_wait_ms(client_errorWaitMs);
-//         return;
-//       }
-//     }
-//   }
-//};
+std::ostream& operator<<(std::ostream &os, const N64ControllerInfo &c)
+{
+  os << "{" << std::endl
+    << "  \"Status\" : " << (int)c.status << std::endl
+    << "  \"Controller ID\" : 0x" << std::hex << std::setfill('0') << std::setw(2) << (int)c.header1 << std::setw(2) << (int)c.header2 << std::dec << std::endl
+    << "  \"Pak Inserted\" : " << c.getStatusFlag(N64Status::PakInserted) << std::endl
+    << "  \"Pak Removed\" : " << c.getStatusFlag(N64Status::PakRemoved) << std::endl
+    << "  \"CRC Error\" : " << c.getStatusFlag(N64Status::AddressCrcError) << std::endl
+    << "}";
+  return os;
+}

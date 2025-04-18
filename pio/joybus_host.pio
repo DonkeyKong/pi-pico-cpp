@@ -36,52 +36,35 @@
 ; Joybus reference: https://n64brew.dev/wiki/Joybus_Protocol
 ;
 ; USAGE NOTES: 
-; autopull = FALSE, autopush = FALSE
-; pull_threshold = 32, push_threshold = 32
-; Commands are bitwise inverted before send because PINDIRS
-; logic is inverted from the data being sent.
+; autopull = true, autopush = true
+; pull_threshold = 8, push_threshold = 8
+; Sent data is bitwise inverted on the CPU because PINDIRS
+; logic is inverted (1 pulls low)
 
 .wrap_target
-entry:
-    SET Y 31            ; Used for comparison later, never changes
-    SET X 7             ; Setup a counter for sent bits
-    PULL                ; Wait until a command comes in
-    
+send_size:
+    OUT X 32 ; Get the number of command bits to send
+
 send_loop:
     SET PINDIRS, 1 [7]  ; Every waveform starts low for 1us
     OUT PINDIRS, 1 [15] ; Let a bit from the OSR take over for 2us
     SET PINDIRS, 0 [6]  ; Return high for 1us
-    JMP X-- send_loop   ; Breaks out after sending the 8th bit
+    JMP X-- send_loop   ; Breaks out after sending the last bit
 
 send_stop:
     SET PINDIRS, 1 [7]  ; Low for 1us
     SET PINDIRS, 0      ; High for 2us (we just set and forget though)
-    SET X 31            ; Setup a counter for recieved bits
+
+rec_size:
+    OUT X 32 ; Get the number of bits to recieve
 
 rec_loop:
-    WAIT 0 PIN 0 [11]   ; Wait for falling edge, then delay 1.5 uS
-    JMP PIN rec_data    ; low = zero or stop, high = one
-
-rec_zero_or_stop:
-    NOP [6]             ; wait 1us and sample again
-    JMP PIN rec_stop    ; low = zero, high = stop
-
-rec_data:
-    IN PINS 1
-    JMP X-- wait_for_data_end
-    PUSH
-    SET X 31
-
-wait_for_data_end:
-    WAIT 1 PIN 0        ; Wait for a logical high here to be sure the send has ended
-    JMP rec_loop [3]    ; Wait 0.5us after high for stability
-
+    WAIT 0 PIN 0 [15]   ; Wait for falling edge, then delay 2 uS
+    IN PINS 1 [10]      ; Read the bit, then delay 1.5us
+    JMP X-- rec_loop    ; There's 0.5us of high in this bit still
+                        ; but it's ok, we'll wait at the top of the loop
 rec_stop:
-    ; There is 0.5us left in the stop pattern on jump here
-    ; Push if X != 31
-    JMP X!=Y send_partial_word
-    JMP entry
-
-send_partial_word:
-    PUSH
+    WAIT 0 PIN 0 [15]  ; wait for falling edge, then delay 2us
+    WAIT 1 PIN 0 [15]  ; wait for rising edge, then delay 2us to finish the stop
+                       ; now it's safe to loop
 .wrap

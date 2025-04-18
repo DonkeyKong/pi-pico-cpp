@@ -1,70 +1,77 @@
 .program joybus_client
 
-; Joybus reference:
-; https://n64brew.dev/wiki/Joybus_Protocol
+; See joybus_host for more information about the joybus protocol
+;
+;              ──┆┐  3  ┌─┆────────
+;    Bit Zero:   ┆└─────┘1┆ release
+;
+;              ──┆┐1┌─────┆────────
+;     Bit One:   ┆└─┘  3  ┆ release
+;
+;              ──┆┐1┌───┆──────────
+;   Host Stop:   ┆└─┘ 2 ┆   release
+;
+;              ──┆┐ 2 ┌───┆────────
+; Device Stop:   ┆└───┘ 2 ┆ release
+;
 
-; Repeatedly get one word of data from the TX FIFO, stalling when the FIFO is
-; empty. Write the least significant bit to the OUT pin group.
+.wrap_target
+wait_for_command:
+    SET X 7
+    SET Y 31
 
-; 1 NOP is 0.125uS
+read_command:
+    WAIT 0 PIN 0 [11]     ; Wait for a falling edge, then delay 1.5 us
+    IN PINS 1 [11]        ; Read in one bit and wait 1.5 us longer
+    JMP X-- read_command  ; Loop for 8 bits
 
-entry:
-    SET X, 7 ; Prepare to read 8 bits
-    SET PINS, 0 ; Set all pins low
+notify_cpu_of_command:
+    PUSH [4]              ; Push the result to the CPU (and wait 4 cycles for cpu reply)
+    OUT X 32              ; CPU should push the number of bytes to read for the command
+    JMP !X wait_for_host_stop
 
-loop:
-    ; Set pins as inputs
-    SET PINDIRS, 0 
+read_bit:
+    WAIT 0 PIN 0 [11]           ; Wait for a falling edge, then delay 1.5 us
+    IN PINS 1                   ; Read in one bit
+    JMP Y-- check_x
+    SET Y 31                  
 
-    ; wait for bus high
-    WAIT 1 PIN 0
+check_x:
+    JMP X-- read_bit [10]       ; Ensure at least 12 cycles between read and loop
 
-    ; Wait for falling flank on incoming data
-    WAIT 0 PIN 0 [18] ; delay 18 clock cycles after executing
+check_for_unsent_data:  
+    SET X 31                    ; If Y != 31, then we need to manually push the data
+    JMP X!=Y push_remainder
+    JMP wait_for_host_stop
 
-    ; previous instruction should execute in 2uS, so we're in the middle of the data
-    ; Read bit
-    IN PINS, 1 ; read 1 bit from input
-    JMP X-- loop ; decrement the bytes to read and loop if not zero
-    
-    ; wait for the stop bit
-    WAIT 1 PIN 0
-    WAIT 0 PIN 0 [20]
-    
-    PUSH ; move data from input shift register to recieve fifo
+push_remainder:
+    PUSH
 
-    NOP [20] ; wait 20 cycles
+wait_for_host_stop:
+    WAIT 0 PIN 0           ; Wait for the host stop falling edge
+    WAIT 1 PIN 0 [11]      ; Wait for the host stop rising edge
+                           ; Delay by 11 cycles so that the falling edge of
+                           ; send (or stop) occurs 2us after the rising edge
+                           ; of host stop (per the spec)
 
-    ; at this point auto push should have notified our code. now it's time to send
-    ; data.
-    PULL [10] ; load 32 bits from the c++ program into the output shift register
-              ; (and wait 10 cycles?? why?)
-    MOV Y, OSR ; move the contents of the output shift register into variable Y
-    PULL ; load 32 more bits
+send:                   ; there should always be 4 cycles to the next edge on entry
+    OUT X 8             ; Shift to X the number of bits to write (0 = stop)
+    JMP !X flush_and_stop
+    JMP send_loop [1]
 
-pull_and_send:
-    
-    ; move 1 bit to send to X
-    OUT X, 1
-    JMP !X send_0
-    JMP send_1
+delay_before_next_bit:
+    NOP [5]
 
-send_0:
-    SET PINDIRS, 1 [22] ; setting pindirs to output will cause it to be pulled low
-    SET PINDIRS, 0 [4]  ; setting to input will make it get pulled high
-    JMP Y-- pull_and_send
-    JMP send_stop
+send_loop:
+    SET PINDIRS, 1 [7]  ; Every waveform starts low for 1us
+    OUT PINDIRS, 1 [15] ; Let a bit from the OSR take over for 2us
+    SET PINDIRS, 0      ; Return high
+    JMP X-- delay_before_next_bit   ; Breaks out after sending all the bits
+    OUT NULL 24   ; Flush to get autopull
+    JMP send
 
-send_1:
-    SET PINDIRS, 1 [7] ; send low
-    SET PINDIRS, 0 [18] ; send high
-    JMP Y-- pull_and_send
-    JMP send_stop
-
-send_stop:
-    SET PINDIRS, 1 [14]
-    SET PINDIRS, 0
-    SET X, 7
-    JMP loop
-
-    ; Check if 1 or zero 
+flush_and_stop:
+    OUT NULL 24 [1]      ; Flush any osr data (auto pulling in the process)
+    SET PINDIRS, 1 [15]  ; Low for 2us
+    SET PINDIRS, 0       ; High for 2us (we just set and forget though)
+.wrap
