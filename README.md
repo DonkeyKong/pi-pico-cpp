@@ -5,13 +5,14 @@
 
 Make complex C++ projects for the pi pico without all the boilerplate. Jump right into talking to hardware and reacting to user input, without reading a tons of docs or writing tons of code.
 
-> This repo is a work in progress. Some components are still being generalized. Each header requires different pieces of the pico SDK. This will eventually be automated.
+> This repo is a work in progress. Some components are still being developed. Each header requires different pieces of the pico SDK. This will eventually be documented and hopefully automated.
 
 # Getting Started
 This process should work the same in macOS, Windows, and Linux
 
 1. Install [Visual Studio Code](https://code.visualstudio.com/Download) and [Docker](https://www.docker.com/products/docker-desktop/)
-2. Clone the [pico-sdk](https://github.com/raspberrypi/pico-sdk)
+2. Clone the [pico-sdk](https://github.com/raspberrypi/pico-sdk) 
+    - Warning: Downloading the zip is not enough, you must clone with git. You need the submodules!
 3. Next to this on disk, clone the [sample project repo](https://github.com/DonkeyKong/ppc-sample-project) (or your own fork of it)
 4. Open Folder... `ppc-sample-project` in vscode
     - When prompted, click `Reopen In Container`
@@ -21,7 +22,7 @@ This process should work the same in macOS, Windows, and Linux
 The project should build and you can deploy the .uf2 file to a pico if you want. From here, just start building on top of the sample project.
 
 # Modules
-## Debug Logging
+## Logging.hpp
 ```c++
 #define LOGGING_ENABLED
 #include <cpp/Logging.hpp>
@@ -33,15 +34,19 @@ DEBUG_LOG_IF((returnCode != 0), "Something went wrong!");
 
 If you don't define `LOGGING_ENABLED`, logging is bypassed without any performance or size penalty. The strings aren't even compiled into your app. Be sure to define the directive before including `Logging.hpp` for the first time. Adding the define in cmake is easiest.
 
+```cmake
+target_compile_definitions(your_project_name PUBLIC "LOGGING_ENABLED")
+```
+
 ### About Standard Out on pico
-If you're new to the pico and you're wondering where these logs print, they go to stdout. Where stdout goes depends on settings in your cmake file. You can choose USB or UART.
+If you're new to the pico and you're wondering where these logs print, they go to stdout. Now what exactly is "stdout" on a headless microcontroller with no OS depends on settings in your cmake file. You can choose to send console IO to USB (as a virtual serial device) or to the onboard UART pins.
 
 ```cmake
 pico_enable_stdio_usb(${PROJECT_NAME} 1)  # swap for uart
 pico_enable_stdio_uart(${PROJECT_NAME} 0)
 ```
 
-You'll also need to init stdio at the top of your main function.
+You'll also need to init stdio at the top of your main function, as seen in the following snippet. I also like to add a startup delay to give consoles a chance to attach and see any init messages.
 
 ```c++
 int main()
@@ -59,20 +64,23 @@ int main()
 }
 ```
 
-I like USB, as it presents the pico as a USB serial adapter to your PC. Use any terminal emulator to connect to the serial device.
+Use any terminal emulator to connect to the serial device.
 
-## Command Parser
+## CommandParser.hpp
 This module lets you use stdin as a simple command processor.
 
 ```c++
 #include <cpp/CommandParser.hpp>
 
 CommandParser parser;
-parser.addCommand("release", [&]()
+float servoPwmFreq = 60.0f;
+
+parser.addProperty("servo_pwm_freq", servoPwmFreq);
+parser.addCommand("release", "", "Power down all servos",[&]()
 {
   servoX.release();
   servoY.release();
-}, "", "Power down all servos");
+}, );
 
 // Main loop
 while(true)
@@ -81,10 +89,16 @@ while(true)
 }
 ```
 
-Commands can take arguments, so long as all the argument types can be assigned using `operator>>` from an istream. You can also return true or false to indicate if your command ran ok.
+Properties are simple values you can get and set from the command parser like
+
+>set servo_pwm_freq 50.0
+
+All properties need to be assignable using `operator>>` from an istream
+
+Commands can take arguments with the same `operator>>` requirement as properties. You can also return true or false to indicate if your command ran ok.
 
 ```c++
-parser.addCommand("mt", [&](double x, double y)
+parser.addCommand("mt", "[x] [y]", "Move to (x, y)", [&](double x, double y)
 {
   if (between(x, 0.0, 1.0) && between(y, 0.0, 1.0))
   {
@@ -93,7 +107,7 @@ parser.addCommand("mt", [&](double x, double y)
     return true; // returning true prints "ok"
   }
   return false; // returning false prints "err"
-}, "[x] [y]", "Move to (x, y)");
+});
 ```
 
 This command is invoked from a connected terminal like this:
@@ -134,7 +148,7 @@ See the `FlashStorage.hpp` header for more technical details.
 
 > ⚠️ Frequent writes to flash memory may reduce the lifespan of the pi pico. Write to flash memory infrequently (i.e.: a few times per day, not 100 times per second)
 
-## Button
+## Button.hpp
 ```c++
 #include <cpp/Logging.hpp>
 #include <cpp/Button.hpp>
@@ -242,7 +256,7 @@ stepper.moveDegrees(360.0f)
 ```
 
 ### Motion Stage
-Create, home, and move a 2D stepper motor driven stage. Implementations available for direct drive and core XY stype stages.
+Create, home, and move a 2D stepper motor driven stage. Implementations available for direct drive and core XY type stages.
 
 ```c++
 #include <cpp/Button.hpp>
@@ -314,21 +328,40 @@ Outputs on the same slice share the same clock divider and wrap (so they have th
 
 Outputs A/A* and B/B* share the same PWM hardware, so attempting to setup e.g.: GPIO 0 and GPIO 16 for PWM usage at the same time will result in the same output on both pins!
 
-## WiFi
-(TBI) Very simple class to bring up the wifi interface and connect it to a specified network. Hard coded to WPA2-PSK security. Needs more work to become useful and general purpose.
-
-## NTPSync.hpp
-(TBI) Synchronize the pi pico system clock with an internet time server. Based on pi pico examples.
+## WiFi.hpp (Under Development)
+Simple class to bring up the wifi interface and connect it to a specified network. Hard coded to WPA2-PSK security.
 
 ## Pio.hpp
-Classes to init and manage PIO (programmable I/O) state machines. Automatically finds a free state machine and copies programs to free PIO hardware.
+Classes to init and manage PIO (programmable I/O) state machines. This is used internally by devices that interface by PIO (N64 Controller, Fan) but `PioMachine` can also be subclassed to ease your own PIO usage. See `PulseCounter.hpp` for a decent example.
 
-The class is smart, so let's say you instantiate 5 copies of a PIO program. On making copy 1, it'll create a program and send it to PIO_0. Copies 2, 3, and 4 will all instantiate on PIO_0 and share the program data. Copy 5 will find PIO_0 is full, make a new copy the program to PIO_1, and instantiate its state machine there.
+The base class is constructed with a `pio_program` reference. It automatically finds a free state machine and copies programs to free PIO hardware.
 
-If you don't know what all this means, basically you can use the complex PIO peripheral classes in this library (N64 Controller, Fan) by simply specifying which pins they connect to and skip learning about how the PIO hardware is split up and provisioned.
+The class is smart, so if you instantiate 5 copies of a PIO program. On making copy 1, it'll create a program and send it to PIO_0. Copies 2, 3, and 4 will all instantiate on PIO_0 and share the program data. Copy 5 will find PIO_0 is full, make a new copy the program to PIO_1, and instantiate its state machine there. You don't have to worry about these details, just access the base class vars after construction.
 
-## I2C Interface
-(TBD) Document and generalize
+## PwmOut.hpp
+To be documented
+
+## I2CInterface.hpp
+
+Most I2C devices are based around the concept of reading or writing registers. The `I2CRegister` class helps execute these read and write transactions. It is templated, to map register memory to and from structured data for convenience.
+
+```c++
+// Using i2c interface 0, gpio0 for data, gpio1 for clock, 100000 baud
+// Talking to connected device 0x24, register address 0x60, 
+// At this address are a 32 bit int and a 16 bit unsigned int
+I2CInterface i2cInterface(i2c0, 0, 1, 100000);
+I2CRegister<int32_t,uint16_t> i2cReg(i2cInterface, 0x24, 0x60);
+
+// Get and set this data
+int32_t data32;
+uint16_t data16;
+i2cReg.get(data32, data16);
+i2cReg.set(data32, data16);
+```
+
+Using `I2CInterface` on its own is possible but it has virtually no useful features over the C API, so there's little point.
+
+
 
 ## Utility Headers
 `Color.hpp` -- RGB and HSV color data structures with conversion and some basic processing functions like blend, gamma, multiply, add, and more
@@ -336,4 +369,3 @@ If you don't know what all this means, basically you can use the complex PIO per
 `Math.hpp` -- Basic math utils for clamping, interpolation, crawling values, etc
 
 `Vector.hpp` -- Templated implementations of vector types
-
