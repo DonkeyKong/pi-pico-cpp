@@ -418,7 +418,7 @@ public:
     val = pio_sm_get_blocking(pio_, sm_);
   }
 
-  void reset()
+  virtual void reset()
   {
     pio_sm_set_enabled(pio_, sm_, false);
     pio_sm_clear_fifos(pio_, sm_);

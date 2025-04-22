@@ -16,62 +16,37 @@
 ;
 
 .wrap_target
-wait_for_command:
+rec_cmd_size:
     SET X 7
-    SET Y 31
 
-read_command:
+rec_cmd_loop:
     WAIT 0 PIN 0 [11]     ; Wait for a falling edge, then delay 1.5 us
-    IN PINS 1 [11]        ; Read in one bit and wait 1.5 us longer
-    JMP X-- read_command  ; Loop for 8 bits
+    IN PINS 1 [11]        ; Read in one bit and delay another 1.5 us
+    JMP X-- rec_cmd_loop  ; Loop for 8 bits
 
-notify_cpu_of_command:
-    PUSH [4]              ; Push the result to the CPU (and wait 4 cycles for cpu reply)
-    OUT X 32              ; CPU should push the number of bytes to read for the command
-    JMP !X wait_for_host_stop
+rec_data_size:
+    OUT X 32              ; CPU should push the number of bits to read for the command
+    JMP !X rec_stop
 
-read_bit:
-    WAIT 0 PIN 0 [11]           ; Wait for a falling edge, then delay 1.5 us
-    IN PINS 1                   ; Read in one bit
-    JMP Y-- check_x
-    SET Y 31                  
+rec_data_loop:
+    WAIT 0 PIN 0 [11]
+    IN PINS 1 [11]
+    JMP X-- rec_data_loop
 
-check_x:
-    JMP X-- read_bit [10]       ; Ensure at least 12 cycles between read and loop
+rec_stop:
+    WAIT 0 PIN 0 [3]
+    WAIT 1 PIN 0
 
-check_for_unsent_data:  
-    SET X 31                    ; If Y != 31, then we need to manually push the data
-    JMP X!=Y push_remainder
-    JMP wait_for_host_stop
-
-push_remainder:
-    PUSH
-
-wait_for_host_stop:
-    WAIT 0 PIN 0           ; Wait for the host stop falling edge
-    WAIT 1 PIN 0 [11]      ; Wait for the host stop rising edge
-                           ; Delay by 11 cycles so that the falling edge of
-                           ; send (or stop) occurs 2us after the rising edge
-                           ; of host stop (per the spec)
-
-send:                   ; there should always be 4 cycles to the next edge on entry
-    OUT X 8             ; Shift to X the number of bits to write (0 = stop)
-    JMP !X flush_and_stop
-    JMP send_loop [1]
-
-delay_before_next_bit:
-    NOP [5]
-
+send_size:
+    OUT X 32 [15]     ; CPU should push the number of bits to write to respond
+    
 send_loop:
     SET PINDIRS, 1 [7]  ; Every waveform starts low for 1us
     OUT PINDIRS, 1 [15] ; Let a bit from the OSR take over for 2us
-    SET PINDIRS, 0      ; Return high
-    JMP X-- delay_before_next_bit   ; Breaks out after sending all the bits
-    OUT NULL 24   ; Flush to get autopull
-    JMP send
+    SET PINDIRS, 0 [6]  ; Return high for 1us
+    JMP X-- send_loop   ; Breaks out after sending the last bit
 
-flush_and_stop:
-    OUT NULL 24 [1]      ; Flush any osr data (auto pulling in the process)
+send_stop:
     SET PINDIRS, 1 [15]  ; Low for 2us
     SET PINDIRS, 0       ; High for 2us (we just set and forget though)
 .wrap

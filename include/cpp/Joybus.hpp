@@ -250,91 +250,85 @@ class JoybusClient : PioMachine
 
   enum class ClientState
   {
-    WaitingForCommand,
-    ReceivingRequest,
-    SendingReply,
-    Stopping
+    GetCommand,
+    SetCommandDataSize,
+    GetCommandData,
+    SetReplySize,
+    SendReply
   };
 
-  ClientState state_ = ClientState::WaitingForCommand;
+  ClientState state_ = ClientState::GetCommand;
   PioBuffer* recBuf;
   PioBuffer* sendBuf;
   size_t recBufInd, sendBufInd;
 
-  void tryBeginCommand()
+  void advanceState()
   {
-    if (state_ != ClientState::WaitingForCommand)
+    if (state_ == ClientState::GetCommand)
     {
-      return;
+      if (!pio_sm_is_rx_fifo_empty(pio_, sm_))
+      {
+        uint32_t command = pio_sm_get(pio_, sm_);
+        recBuf = onRecieveCommand((JoybusCommand)command);
+        recBufInd = 0;
+        state_ = ClientState::SetCommandDataSize;
+      }
     }
 
-    // If this client has nothing in its rx buffer, skip
-    if (!pio_sm_is_rx_fifo_empty(pio_, sm_))
+    if (state_ == ClientState::SetCommandDataSize)
     {
-      uint32_t command = pio_sm_get(pio_, sm_);
-      recBuf = onRecieveCommand((JoybusCommand)command);
-      recBufInd = 0;
-      state_ = ClientState::ReceivingRequest;
-    }
-  }
-
-  void tryReceiveData()
-  {
-    if (state_ != ClientState::ReceivingRequest)
-    {
-      return;
+      if (!pio_sm_is_tx_fifo_full(pio_, sm_))
+      {
+        uint32_t size = recBuf ? (recBuf->size * 8 - 1) : 0;
+        pio_sm_put(pio_, sm_, size);
+        state_ = ClientState::GetCommandData;
+      }
     }
 
-    while (!pio_sm_is_rx_fifo_empty(pio_, sm_) &&
-            recBuf != nullptr &&
-            recBufInd < recBuf->size)
+    if (state_ == ClientState::GetCommandData)
     {
-      recBuf->unpack(pio_sm_get(pio_, sm_), recBufInd);
-      recBufInd += 4;
+      while (!pio_sm_is_rx_fifo_empty(pio_, sm_) &&
+        recBuf != nullptr &&
+        recBufInd < recBuf->size)
+      {
+        recBuf->unpack(pio_sm_get(pio_, sm_), recBufInd);
+        recBufInd += 1;
+      }
+
+      if (recBuf == nullptr || recBufInd >= recBuf->size)
+      {
+        sendBuf = onSendResult();
+        sendBufInd = 0;
+        state_ = ClientState::SetReplySize;
+      }
     }
 
-    if (recBuf == nullptr || recBufInd >= recBuf->size)
+    if (state_ == ClientState::SetReplySize)
     {
-      sendBuf = onSendResult();
-      sendBufInd = 0;
-      state_ = ClientState::SendingReply;
-    }
-  }
-
-  void tryPushData()
-  {
-    if (state_ != ClientState::SendingReply)
-    {
-      return;
+      if (!pio_sm_is_tx_fifo_full(pio_, sm_))
+      {
+        uint32_t size = sendBuf ? (sendBuf->size * 8 - 1) : 0;
+        pio_sm_put(pio_, sm_, size);
+        state_ = ClientState::SendReply;
+      }
     }
 
-    while (!pio_sm_is_tx_fifo_full(pio_, sm_) &&
-            sendBuf != nullptr &&
-            sendBufInd < sendBuf->size)
+    if (state_ == ClientState::SendReply)
     {
-      uint32_t scratch;
-      sendBuf->pack(scratch, sendBufInd);
-      pio_sm_put(pio_, sm_, scratch);
-      sendBufInd += 4;
-    }
+      while (!pio_sm_is_tx_fifo_full(pio_, sm_) &&
+        sendBuf != nullptr &&
+        sendBufInd < sendBuf->size)
+      {
+        uint32_t scratch;
+        sendBuf->pack(scratch, sendBufInd);
+        pio_sm_put(pio_, sm_, scratch);
+        sendBufInd += 1;
+      }
 
-    if (sendBuf == nullptr || sendBufInd >= sendBuf->size)
-    {
-      state_ = ClientState::Stopping;
-    }
-  }
-
-  void tryPushStop()
-  {
-    if (state_ != ClientState::Stopping)
-    {
-      return;
-    }
-
-    if (!pio_sm_is_tx_fifo_full(pio_, sm_))
-    {
-      pio_sm_put(pio_, sm_, 0);
-      state_ = ClientState::WaitingForCommand;
+      if (sendBuf == nullptr || sendBufInd >= sendBuf->size)
+      {
+        state_ = ClientState::GetCommand;
+      }
     }
   }
 
@@ -342,8 +336,7 @@ class JoybusClient : PioMachine
   {
     for (auto client : instances)
     {
-      client->tryBeginCommand();
-      client->tryReceiveData();
+      client->advanceState();
     }
   }
 
@@ -351,8 +344,7 @@ class JoybusClient : PioMachine
   {
     for (auto client : instances)
     {
-      client->tryPushData();
-      client->tryPushStop();
+      client->advanceState();
     }
   }
 
@@ -384,8 +376,8 @@ public:
     sm_config_set_jmp_pin(&config_, pin);
 
     // This machine uses autopull and autopush!
-    sm_config_set_in_shift(&config_, false, true, 32);
-    sm_config_set_out_shift(&config_, false, true, 32);
+    sm_config_set_in_shift(&config_, false, true, 8);
+    sm_config_set_out_shift(&config_, false, true, 8);
 
     // Set this pin's GPIO function (connect PIO to the pad)
     pio_gpio_init(pio_, pin);
@@ -417,4 +409,15 @@ public:
       }
     }
   }
+
+  void reset() override
+  {
+    state_ = ClientState::GetCommand;
+    sendBuf = nullptr;
+    recBuf = nullptr;
+    sendBufInd = 0;
+    recBufInd = 0;
+    PioMachine::reset();
+  }
+
 };

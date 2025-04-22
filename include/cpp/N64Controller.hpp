@@ -363,13 +363,14 @@ private:
 class N64ControllerOut : JoybusClient
 {
   JoybusCommand cmd_;
-  N64ControllerInfo info_;
-  N64ControllerButtonState state_;
 
 public:
+  N64ControllerInfo info;
+  N64ControllerButtonState state;
+
   N64ControllerOut(uint pin) 
     : JoybusClient(pin)
-  {}
+  { }
 
 protected:
   virtual PioBuffer* onRecieveCommand(JoybusCommand cmd)
@@ -387,9 +388,9 @@ protected:
     {
       case JoybusCommand::Reset:
       case JoybusCommand::Info:
-        return &info_;
+        return &info;
       case JoybusCommand::ControllerState:
-        return &state_;
+        return &state;
       default:
         return nullptr;
     }
