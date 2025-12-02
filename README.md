@@ -80,7 +80,7 @@ parser.addCommand("release", "", "Power down all servos",[&]()
 {
   servoX.release();
   servoY.release();
-}, );
+});
 
 // Main loop
 while(true)
