@@ -2,8 +2,6 @@
 
 #include <algorithm>
 
-#include <algorithm>
-
 struct Vect2f
 {
   float x = 0;

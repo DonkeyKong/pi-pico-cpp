@@ -126,7 +126,7 @@ public:
                 << (cmd.help.empty() ? "No help string provided" : cmd.help) << std::endl;
     }
     
-    if (commands.count("set") > 0 || commands.count("get") > 0)
+    if (properties.size() > 0)
     {
       std::cout << "    get [property]              Get a property's value" << std::endl;
       std::cout << "    set [property] [value]      Set a property's value (if writable)" << std::endl;
