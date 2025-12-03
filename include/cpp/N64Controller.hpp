@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Joybus.hpp"
+#include "Vector.hpp"
 
 #include <cstring>
 
@@ -108,12 +109,12 @@ struct N64ControllerButtonState : public PioBuffer
 
   N64ControllerButtonState() : PioBuffer(4) {}
 
-  Vect2f getStick()
+  Vec2f getStick()
   {
     return {(float)xAxis, (float)yAxis};
   }
 
-  void setStick(const Vect2f &pos)
+  void setStick(const Vec2f &pos)
   {
     xAxis = (int8_t)pos.x;
     yAxis = (int8_t)pos.y;

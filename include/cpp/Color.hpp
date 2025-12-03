@@ -279,7 +279,7 @@ void xyzToRgb(const XYZColor &xyz, RGBColor &rgb)
   rgb.B = b;
 }
 
-static void rgbToLab(const RGBColor &rgb, LabColor &lab)
+void rgbToLab(const RGBColor &rgb, LabColor &lab)
 {
   XYZColor xyz;
   rgbToXyz(rgb, xyz);
@@ -297,7 +297,7 @@ static void rgbToLab(const RGBColor &rgb, LabColor &lab)
   lab.b = 200 * (y - z);
 }
 
-static void labToRgb(const LabColor &lab, RGBColor &rgb)
+void labToRgb(const LabColor &lab, RGBColor &rgb)
 {
   double y = (lab.L + 16.0) / 116.0;
   double x = lab.a / 500.0 + y;

@@ -84,37 +84,59 @@ struct Vec2
 
 typedef Vec2<float> Vec2f;
 typedef Vec2<double> Vec2d;
-typedef Vec2<int64_t> Vec2i;
+typedef Vec2<int> Vec2i;
 
-struct Vec3f
+template <typename T>
+struct Vec3
 {
-  float X = 0.0f;
-  float Y = 0.0f;
-  float Z = 0.0f;
+  T X = 0;
+  T Y = 0;
+  T Z = 0;
 
-  bool operator==(const Vec3f& other)
+  bool operator==(const Vec3& other) const
   {
     return X == other.X && Y == other.Y && Z == other.Z;
   }
 
-  bool operator!=(const Vec3f& other)
+  bool operator!=(const Vec3& other) const
   {
     return X != other.X || Y != other.Y || Z != other.Z;
   }
 
-  Vec3f operator* (float c) const
+  Vec3 operator+(const Vec3& other) const
   {
-    return {c*X, c*Y, c*Z};
+    return {X + other.X , Y + other.Y , + other.Z};
   }
 
-  Vec3f normalize()
+  void operator+=(const Vec3& other)
+  {
+    X += other.X;
+    Y += other.Y;
+    Z += other.Z;
+  }
+
+  Vec3 operator-(const Vec3& other) const
+  {
+    return {X - other.X , Y - other.Y , - other.Z};
+  }
+
+  Vec3 operator* (float c) const
+  {
+    return {(T)(c*(float)X), (T)(c*(float)Y), (T)(c*(float)Z)};
+  }
+
+  Vec3 normalize() const
   {
     float n = norm();
-    return {X / n, Y / n, Z / n};
+    return {(T)((float)X / n), (T)((float)Y / n), (T)((float)Z / n)};
   }
 
   float norm() const
   {
-    return std::sqrt(std::pow(X, 2.0f) + std::pow(Y, 2.0f) + std::pow(Z, 2.0f));
+    return std::sqrt(std::pow((float)X, 2.0f) + std::pow((float)Y, 2.0f) + std::pow((float)Z, 2.0f));
   }
 };
+
+typedef Vec3<float> Vec3f;
+typedef Vec3<double> Vec3d;
+typedef Vec3<int> Vec3i;
