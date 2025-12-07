@@ -30,7 +30,12 @@ struct RGBColor
 
   RGBColor operator* (float c) const
   {
-    return {(uint8_t)(c*R), (uint8_t)(c*G), (uint8_t)(c*B)};
+    return 
+    {
+      (uint8_t)std::clamp(c*R, 0.0f, 255.0f),
+      (uint8_t)std::clamp(c*G, 0.0f, 255.0f),
+      (uint8_t)std::clamp(c*B, 0.0f, 255.0f)
+    };
   }
 
   bool operator== (const RGBColor& c) const
@@ -45,7 +50,12 @@ struct RGBColor
 
   RGBColor operator* (const Vec3f& c) const
   {
-    return {(uint8_t)std::clamp(c.X*R, 0.0f, 255.0f), (uint8_t)std::clamp(c.Y*G, 0.0f, 255.0f), (uint8_t)std::clamp(c.Z*B, 0.0f, 255.0f)};
+    return
+    {
+      (uint8_t)std::clamp(c.X*R, 0.0f, 255.0f),
+      (uint8_t)std::clamp(c.Y*G, 0.0f, 255.0f),
+      (uint8_t)std::clamp(c.Z*B, 0.0f, 255.0f)
+    };
   }
 
   void applyGamma(float gamma)
@@ -53,6 +63,17 @@ struct RGBColor
     R = (uint8_t)std::clamp(std::pow((float)R / 255.0f, gamma) * 255.0f, 0.0f, 255.0f);
     G = (uint8_t)std::clamp(std::pow((float)G / 255.0f, gamma) * 255.0f, 0.0f, 255.0f);
     B = (uint8_t)std::clamp(std::pow((float)B / 255.0f, gamma) * 255.0f, 0.0f, 255.0f);
+  }
+
+  static RGBColor fromRGB565(uint16_t rgb565)
+  {
+    return
+    {
+      (uint8_t)  (rgb565 & (uint16_t)0b0000000011111000),
+      (uint8_t)(((rgb565 & (uint16_t)0b0000000000000111) << 5) | 
+                ((rgb565 & (uint16_t)0b1110000000000000) << 11)),
+      (uint8_t) ((rgb565 & (uint16_t)0b0001111100000000) >> 5),
+    };
   }
 
   static RGBColor blend(const RGBColor& a, const RGBColor& b, float t = 0.5f)
