@@ -35,6 +35,22 @@ public:
   {
     return gpio_get(pin_);
   }
+
+  bool waitFor(bool state, int timeoutMs)
+  {
+    int i = 0;
+    while (get() != state)
+    {
+      sleep_ms(10);
+      ++i;
+      if (i*10 > timeoutMs)
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+
   ~DiscreteIn()
   {
     gpio_deinit(pin_);
