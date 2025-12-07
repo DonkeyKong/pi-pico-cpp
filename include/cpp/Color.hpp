@@ -145,6 +145,9 @@ struct LabColor
   }
 
   float deltaE(const LabColor& other) const;
+
+  // A "good enough" distance metric that preserves order
+  int deltaF(const LabColor& other) const;
 };
 #pragma pack(pop)
 
@@ -352,6 +355,14 @@ RGBColor LabColor::toRGB() const
 float LabColor::deltaE(const LabColor& other) const
 {
   return sqrtf(powf(L-other.L, 2) + powf(a-other.a, 2) + powf(b-other.b, 2));
+}
+
+int LabColor::deltaF(const LabColor& other) const
+{
+  int dL = (int)L-(int)other.L;
+  int da = (int)a-(int)other.a;
+  int db = (int)b-(int)other.b;
+  return dL*dL+da*da+db*db;
 }
 
 static const std::vector<RGBColor> kelvinTable = 
