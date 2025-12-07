@@ -60,9 +60,9 @@ struct RGBColor
 
   void applyGamma(float gamma)
   {
-    R = (uint8_t)std::clamp(std::pow((float)R / 255.0f, gamma) * 255.0f, 0.0f, 255.0f);
-    G = (uint8_t)std::clamp(std::pow((float)G / 255.0f, gamma) * 255.0f, 0.0f, 255.0f);
-    B = (uint8_t)std::clamp(std::pow((float)B / 255.0f, gamma) * 255.0f, 0.0f, 255.0f);
+    R = (uint8_t)std::clamp(powf((float)R / 255.0f, gamma) * 255.0f, 0.0f, 255.0f);
+    G = (uint8_t)std::clamp(powf((float)G / 255.0f, gamma) * 255.0f, 0.0f, 255.0f);
+    B = (uint8_t)std::clamp(powf((float)B / 255.0f, gamma) * 255.0f, 0.0f, 255.0f);
   }
 
   static RGBColor fromRGB565(uint16_t rgb565)
@@ -145,9 +145,6 @@ struct LabColor
   }
 
   float deltaE(const LabColor& other) const;
-
-  // A "good enough" distance metric that preserves order
-  int deltaF(const LabColor& other) const;
 };
 #pragma pack(pop)
 
@@ -271,32 +268,32 @@ uint8_t RGBColor::getGrayValue() const
 
 void rgbToXyz(const RGBColor &rgb, XYZColor &xyz)
 {
-  double r = (float)rgb.R / 255.0;
-  double g = (float)rgb.G / 255.0;
-  double b = (float)rgb.B / 255.0;
+  float r = (float)rgb.R / 255.0f;
+  float g = (float)rgb.G / 255.0f;
+  float b = (float)rgb.B / 255.0f;
 
-  r = ((r > 0.04045) ? pow((r + 0.055) / 1.055, 2.4) : (r / 12.92)) * 100.0;
-  g = ((g > 0.04045) ? pow((g + 0.055) / 1.055, 2.4) : (g / 12.92)) * 100.0;
-  b = ((b > 0.04045) ? pow((b + 0.055) / 1.055, 2.4) : (b / 12.92)) * 100.0;
+  r = ((r > 0.04045f) ? powf((r + 0.055f) / 1.055f, 2.4f) : (r / 12.92f)) * 100.0f;
+  g = ((g > 0.04045f) ? powf((g + 0.055f) / 1.055f, 2.4f) : (g / 12.92f)) * 100.0f;
+  b = ((b > 0.04045f) ? powf((b + 0.055f) / 1.055f, 2.4f) : (b / 12.92f)) * 100.0f;
 
-  xyz.X = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
-  xyz.Y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
-  xyz.Z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
+  xyz.X = r * 0.4124564f + g * 0.3575761f + b * 0.1804375f;
+  xyz.Y = r * 0.2126729f + g * 0.7151522f + b * 0.0721750f;
+  xyz.Z = r * 0.0193339f + g * 0.1191920f + b * 0.9503041f;
 }
 
 void xyzToRgb(const XYZColor &xyz, RGBColor &rgb)
 {
-  double x = xyz.X / 100.0;
-  double y = xyz.Y / 100.0;
-  double z = xyz.Z / 100.0;
+  float x = xyz.X / 100.0f;
+  float y = xyz.Y / 100.0f;
+  float z = xyz.Z / 100.0f;
 
-  double r = x * 3.2404542 + y * -1.5371385 + z * -0.4985314;
-  double g = x * -0.9692660 + y * 1.8760108 + z * 0.0415560;
-  double b = x * 0.0556434 + y * -0.2040259 + z * 1.0572252;
+  float r = x * 3.2404542f + y * -1.5371385f + z * -0.4985314f;
+  float g = x * -0.9692660f + y * 1.8760108f + z * 0.0415560f;
+  float b = x * 0.0556434f + y * -0.2040259f + z * 1.0572252f;
 
-  r = ((r > 0.0031308) ? (1.055 * pow(r, 1 / 2.4) - 0.055) : (12.92 * r)) * 255.0;
-  g = ((g > 0.0031308) ? (1.055 * pow(g, 1 / 2.4) - 0.055) : (12.92 * g)) * 255.0;
-  b = ((b > 0.0031308) ? (1.055 * pow(b, 1 / 2.4) - 0.055) : (12.92 * b)) * 255.0;
+  r = ((r > 0.0031308f) ? (1.055f * powf(r, 1.0f / 2.4f) - 0.055f) : (12.92f * r)) * 255.0f;
+  g = ((g > 0.0031308f) ? (1.055f * powf(g, 1.0f / 2.4f) - 0.055f) : (12.92f * g)) * 255.0f;
+  b = ((b > 0.0031308f) ? (1.055f * powf(b, 1.0f / 2.4f) - 0.055f) : (12.92f * b)) * 255.0f;
 
   rgb.R = r;
   rgb.G = g;
@@ -308,34 +305,34 @@ void rgbToLab(const RGBColor &rgb, LabColor &lab)
   XYZColor xyz;
   rgbToXyz(rgb, xyz);
 
-  double x = xyz.X / 95.047;
-  double y = xyz.Y / 100.00;
-  double z = xyz.Z / 108.883;
+  float x = xyz.X / 95.047f;
+  float y = xyz.Y / 100.00f;
+  float z = xyz.Z / 108.883f;
 
-  x = (x > 0.008856) ? cbrt(x) : (7.787 * x + 16.0 / 116.0);
-  y = (y > 0.008856) ? cbrt(y) : (7.787 * y + 16.0 / 116.0);
-  z = (z > 0.008856) ? cbrt(z) : (7.787 * z + 16.0 / 116.0);
+  x = (x > 0.008856f) ? cbrtf(x) : (7.787f * x + 16.0f / 116.0f);
+  y = (y > 0.008856f) ? cbrtf(y) : (7.787f * y + 16.0f / 116.0f);
+  z = (z > 0.008856f) ? cbrtf(z) : (7.787f * z + 16.0f / 116.0f);
 
-  lab.L = (116.0 * y) - 16;
-  lab.a = 500 * (x - y);
-  lab.b = 200 * (y - z);
+  lab.L = (116.0f * y) - 16.0f;
+  lab.a = 500.0f * (x - y);
+  lab.b = 200.0f * (y - z);
 }
 
 void labToRgb(const LabColor &lab, RGBColor &rgb)
 {
-  double y = (lab.L + 16.0) / 116.0;
-  double x = lab.a / 500.0 + y;
-  double z = y - lab.b / 200.0;
+  float y = (lab.L + 16.0) / 116.0f;
+  float x = lab.a / 500.0f + y;
+  float z = y - lab.b / 200.0f;
 
-  double x3 = std::pow(x, 3);
-  double y3 = std::pow(y, 3);
-  double z3 = std::pow(z, 3);
+  float x3 = powf(x, 3.0f);
+  float y3 = powf(y, 3.0f);
+  float z3 = powf(z, 3.0f);
 
-  x = ((x3 > 0.008856) ? x3 : ((x - 16.0 / 116.0) / 7.787)) * 95.047;
-  y = ((y3 > 0.008856) ? y3 : ((y - 16.0 / 116.0) / 7.787)) * 100.0;
-  z = ((z3 > 0.008856) ? z3 : ((z - 16.0 / 116.0) / 7.787)) * 108.883;
+  x = ((x3 > 0.008856f) ? x3 : ((x - 16.0f / 116.0f) / 7.787f)) * 95.047f;
+  y = ((y3 > 0.008856f) ? y3 : ((y - 16.0f / 116.0f) / 7.787f)) * 100.0f;
+  z = ((z3 > 0.008856f) ? z3 : ((z - 16.0f / 116.0f) / 7.787f)) * 108.883f;
 
-  xyzToRgb({(float)x, (float)y, (float)z}, rgb);
+  xyzToRgb({x, y, z}, rgb);
 }
 
 LabColor RGBColor::toLab() const
@@ -355,14 +352,6 @@ RGBColor LabColor::toRGB() const
 float LabColor::deltaE(const LabColor& other) const
 {
   return sqrtf(powf(L-other.L, 2) + powf(a-other.a, 2) + powf(b-other.b, 2));
-}
-
-int LabColor::deltaF(const LabColor& other) const
-{
-  int dL = (int)L-(int)other.L;
-  int da = (int)a-(int)other.a;
-  int db = (int)b-(int)other.b;
-  return dL*dL+da*da+db*db;
 }
 
 static const std::vector<RGBColor> kelvinTable = 
