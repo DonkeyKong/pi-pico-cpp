@@ -55,7 +55,28 @@ public:
   void update()
   {
     lastState_ = state_;
-    state_ = getButtonState();
+
+    // Implement debounce. If state is changing it needs to be held
+    // for "debounce" update cycles before it registers.
+    bool prospectiveState = getButtonState();
+    if (prospectiveState != lastState_)
+    {
+      if (debounceCounter_ < debounce_)
+      {
+        debounceCounter_ += 1;
+      }
+      else
+      {
+        state_ = prospectiveState;
+        debounceCounter_ = 0;
+      }
+    }
+    else
+    {
+      debounceCounter_ = 0;
+    }
+    
+
     if (lastState_ != state_)
     {
       stateTime_ = get_absolute_time();
@@ -99,14 +120,25 @@ public:
     holdActivationRepeatMs_ = val;
   }
 
+  void debounce(int updateCycles)
+  {
+    debounce_ = updateCycles;
+  }
+
 protected:
-  Button(bool enableHoldAction = false) : enableHoldAction_(enableHoldAction) {}
+  Button(bool enableHoldAction = false, int debounce = 0)
+    : enableHoldAction_(enableHoldAction)
+    , debounce_{debounce} {}
   virtual bool getButtonState() = 0;
+
+  
   bool state_;
   bool lastState_;
   absolute_time_t stateTime_;
 
   bool enableHoldAction_ = false;
+  int debounce_ = 0;
+  int debounceCounter_ = 0;
   int holdActivationMs_ = 1000;
   int holdActivationRepeatMs_ = 0;
   absolute_time_t holdActivationTime_;
@@ -144,8 +176,8 @@ public:
     // Give the gpio set operations a chance to settle!
     sleep_until(make_timeout_time_ms(1));
 
+    state_ = getButtonState();
     update();
-    lastState_ = state_;
     stateTime_ = get_absolute_time();
   }
 
@@ -159,7 +191,7 @@ public:
     gpio_deinit(pin_);
   }
 
-private:
+protected:
   uint32_t pin_;
 };
 
@@ -172,8 +204,8 @@ public:
     , bit_(bit)
     , highState_(highState)
   {
+    state_ = getButtonState();
     update();
-    lastState_ = state_;
     stateTime_ = get_absolute_time();
   }
 
