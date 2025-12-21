@@ -40,6 +40,14 @@ namespace
 
 class BootSelButton : public Button
 {
+public:
+  BootSelButton()
+  {
+    update();
+    lastState_ = state_;
+    stateTime_ = get_absolute_time();
+  }
+protected:
   virtual bool getButtonState() override
   {
     return get_bootsel_button();
