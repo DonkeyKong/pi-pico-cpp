@@ -48,7 +48,16 @@ T moveTowards(T val, T dest, T inc)
 template <typename InT, typename OutT>
 inline OutT remap(InT val, InT inA, InT inB, OutT outA, OutT outB)
 {
-  return (OutT)(val - inA) / (OutT)(inB - inA) * (outB - outA) + outA;
+  // If either in or out are integral, do the remap in float math
+  // then cast to out type.
+  if constexpr(std::is_integral_v<InT> || std::is_integral_v<OutT>)
+  {
+    return (OutT)((float)(val - inA) / (float)(inB - inA) * (float)(outB - outA)) + outA;
+  }
+  else
+  {
+    return (OutT)(val - inA) / (OutT)(inB - inA) * (outB - outA) + outA;
+  }
 }
 
 // This isn't needed yet so it's untested but I think it's correct
