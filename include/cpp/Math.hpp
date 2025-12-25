@@ -60,6 +60,14 @@ inline OutT remap(InT val, InT inA, InT inB, OutT outA, OutT outB)
   }
 }
 
+template <typename T>
+static T remapClamp(T value, T inMin, T inMax, T outMin, T outMax)
+{
+  float t = (float)(value - inMin)/(float)(inMax-inMin);
+  float out = t * (float)(outMax-outMin) + (float)(outMin);
+  return std::clamp((T)std::clamp(out, (float)outMin, (float)outMax), outMin, outMax);
+}
+
 // This isn't needed yet so it's untested but I think it's correct
 // template <typename InT>
 // float invLerpF(InT val, InT inA, InT inB, bool clamp = true)
