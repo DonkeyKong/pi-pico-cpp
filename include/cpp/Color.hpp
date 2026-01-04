@@ -19,7 +19,16 @@ struct HSVColor
   float S = 0.0f;
   float V = 0.0f;
 
-  RGBColor toRGB();
+  RGBColor toRGB() const;
+};
+
+struct YUVColor
+{
+  uint8_t Y = 0;
+  uint8_t U = 0;
+  uint8_t V = 0;
+
+  RGBColor toRGB() const;
 };
 
 struct RGBColor
@@ -168,7 +177,7 @@ static_assert(std::is_trivially_copyable<LabColor>::value, "LabColor must be tri
 // between 1000k and 12000k
 RGBColor GetColorFromTemperature(float tempK);
 
-RGBColor HSVColor::toRGB()
+RGBColor HSVColor::toRGB() const
 {
   float r, g, b;
   int range = (int)std::floor(H / 60.0f);
@@ -347,6 +356,16 @@ RGBColor LabColor::toRGB() const
   RGBColor rgb;
   labToRgb(*this, rgb);
   return rgb;
+}
+
+RGBColor YUVColor::toRGB() const
+{
+  return 
+  {
+    (uint8_t)std::clamp(Y + 1.4075f * (V - 128.0f), 0.0f, 255.0f),
+    (uint8_t)std::clamp(Y - 0.3455f * (U - 128.0f) - (0.7169f * (V - 128.0f)), 0.0f, 255.0f),
+    (uint8_t)std::clamp(Y + 1.7790f * (U - 128.0f), 0.0f, 255.0f)
+  };
 }
 
 float LabColor::deltaE(const LabColor& other) const
