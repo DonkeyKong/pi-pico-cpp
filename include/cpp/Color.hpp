@@ -362,9 +362,9 @@ RGBColor YUVColor::toRGB() const
 {
   return 
   {
-    (uint8_t)std::clamp(Y + 1.4075f * (V - 128.0f), 0.0f, 255.0f),
-    (uint8_t)std::clamp(Y - 0.3455f * (U - 128.0f) - (0.7169f * (V - 128.0f)), 0.0f, 255.0f),
-    (uint8_t)std::clamp(Y + 1.7790f * (U - 128.0f), 0.0f, 255.0f)
+    (uint8_t)std::clamp((float)Y + 1.4075f * ((float)V - 128.0f), 0.0f, 255.0f),
+    (uint8_t)std::clamp((float)Y - 0.3455f * ((float)U - 128.0f) - (0.7169f * ((float)V - 128.0f)), 0.0f, 255.0f),
+    (uint8_t)std::clamp((float)Y + 1.7790f * ((float)U - 128.0f), 0.0f, 255.0f)
   };
 }
 
