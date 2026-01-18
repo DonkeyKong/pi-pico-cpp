@@ -4,6 +4,8 @@
 #include "hardware/spi.h"
 #include <hardware/gpio.h>
 
+#include <vector>
+
 class SPIDevice
 {
 public:
