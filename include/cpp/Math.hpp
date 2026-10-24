@@ -76,3 +76,50 @@ static T remapClamp(T value, T inMin, T inMax, T outMin, T outMax)
 //   if (clamp) return std::clamp(t, std::min<float>(inA, inB), std::max<float>(inA, inB));
 //   return t;
 // }
+
+template <int NumSamples, typename T = float>
+class MovingAverage
+{
+  T val_[NumSamples];
+  int index_= -1;
+public:
+  MovingAverage(T val)
+  {
+    for (int i=0; i < NumSamples; ++i)
+    {
+      val_[i] = val;
+    }
+  }
+  void clear(T val = 0)
+  {
+    for (int i=0; i < NumSamples; ++i)
+    {
+      val_[i] = val;
+    }
+  }
+  void update(T val)
+  {
+    if (index_ == -1)
+    {
+      for (int i=0; i < NumSamples; ++i)
+      {
+        val_[i] = val;
+      }
+    }
+    else
+    {
+      val_[index_] = val;
+    }
+    index_ = (index_ + 1) % NumSamples;
+  }
+
+  operator T() const
+  {
+    T avg = 0;
+    for (int i=0; i < NumSamples; ++i)
+    {
+      avg += val_[i];
+    }
+    return avg / (T)NumSamples;
+  }
+};
